@@ -529,8 +529,8 @@ class YFClient:
 
 
 
-yf = YFClient()
-yf.connect()
+# yf = YFClient()
+# yf.connect()
 
 # x = yf._price_history('AAPL', period='1d', interval='1m')
 
