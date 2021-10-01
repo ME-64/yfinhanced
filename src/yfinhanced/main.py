@@ -230,8 +230,8 @@ class YFClient:
 
     def get_equity_reference(self, region=['us'], max_results=10000, mcap_filter=100_000_000):# {{{
 
-        payload = yf._build_screener_payload(region=region, mcap_filter=mcap_filter)
-        res = yf._iter_screener_requests(payload, max_results)
+        payload = self._build_screener_payload(region=region, mcap_filter=mcap_filter)
+        res = self._iter_screener_requests(payload, max_results)
 
         data = pd.DataFrame(res)
 
