@@ -7,6 +7,8 @@ import datetime
 import pytz
 from dateutil import relativedelta
 
+import aiohttp
+import asyncio
 
 
 
@@ -67,9 +69,12 @@ class YFClient:
     def __init__(self):# {{{
         pass# }}}
 
-    def connect(self):# {{{
+    def connect(self, *args, **kwargs):# {{{
 
         self.session = requests.session()
+
+        if 'proxy' in kwargs:
+            self.session.proxies = kwargs['proxy']
 
 
         retries = urllib3.util.retry.Retry(total=0,
@@ -226,7 +231,18 @@ class YFClient:
 
         req = self.session.get(url, params={'count': count})
 
-        return req.json()# }}}
+        resp = req.json()
+
+        try:
+            data = resp['finance']['result'][0]['quotes']
+            tmp = []
+            for i in data:
+                tmp.append(i['symbol'])
+            return tmp
+        except Exception as e:
+            print(resp)
+            raise e
+        # }}}
 
     def get_equity_reference(self, region=['us'], max_results=10000, mcap_filter=100_000_000):# {{{
 
@@ -527,10 +543,25 @@ class YFClient:
                 'post_start': convert_sess('post', 'start'),
                 'post_end': convert_sess('post', 'end')}# }}}
 
+    def get_trending(self, regions=['us', 'gb'], count=5):# {{{
+
+        if isinstance(regions, str):
+            regions = [regions]
+
+        res = {}
+        for reg in regions:
+            tmp = self._get_trending(region=reg, count=count)
+            res[reg] = tmp
+
+        return res# }}}
 
 
-# yf = YFClient()
-# yf.connect()
+
+yf = YFClient()
+yf.connect()
+
+trend = yf.get_trending(regions=['us', 'gb'], count=10)
+
 
 # x = yf._price_history('AAPL', period='1d', interval='1m')
 
