@@ -69,33 +69,45 @@ class YFClient:
     def __init__(self):# {{{
         pass# }}}
 
-    def connect(self, *args, **kwargs):# {{{
+    async def connect(self, *args, **kwargs):# {{{
 
-        self.session = requests.session()
-
+        self.proxy = None
         if 'proxy' in kwargs:
-            self.session.proxies = kwargs['proxy']
+            self.proxy = kwargs['proxy']
+
+        self.crumb, self.cookies = self._get_crumb()
+
+        connector = aiohttp.TCPConnector(limit=10)
+        self.session = aiohttp.ClientSession(connector=connector,
+                headers=self.HEADERS, cookies=self.cookies)
 
 
-        retries = urllib3.util.retry.Retry(total=0,
-                backoff_factor=6, status_forcelist=[429,500,502,503,504,413])
-
-        ada = requests.adapters.HTTPAdapter(max_retries=retries)
-
-        self.session.mount('https://', ada)
-        self.session.headers.update(self.HEADERS)
-
-        # we need to make a dummy request to get the crumb
-        tmp = self.session.get(self.DUMMY_URL)
-
-        crumb = re.findall('"CrumbStore":{"crumb":"(.+?)"}', tmp.text)[0]
-
-        self.crumb = crumb 
-        self.session.params.update({'crumb': self.crumb})
         # }}}
 
-    def disconnect(self):# {{{
-        self.session.close()# }}}
+    def _get_crumb(self):# {{{
+        """method to retrieve the crumb that yahoo uses for api authentication"""
+
+        # tmp = requests.get(self.DUMMY_URL, headers=self.HEADERS, proxies=self.proxy)
+        tmp = requests.get(self.DUMMY_URL, headers=self.HEADERS, proxies={'https': self.proxy})
+        crumb = re.findall('"CrumbStore":{"crumb":"(.+?)"}', tmp.text)[0]
+        cookies = tmp.cookies
+
+        return crumb, cookies# }}}
+
+    async def _make_request(self, method, url, *args, **kwargs):# {{{
+        """function that makes all the requests async"""
+
+        params = {'crumb': self.crumb}
+
+        if 'params' in kwargs:
+            params.update(kwargs['params'])
+            del kwargs['params']
+
+        resp = await self.session.request(method, url, params=params, proxy=self.proxy, *args, **kwargs)
+        return resp# }}}
+
+    async def disconnect(self):# {{{
+        await self.session.close()# }}}
 
     def _build_screener_payload(self,# {{{
             sort_field='intradaymarketcap', sort_type='DESC', quote_type='EQUITY',
@@ -160,16 +172,17 @@ class YFClient:
             to_add.append(reg_query)
         return payload# }}}
 
-    def _send_screener_request(self, payload):# {{{
+    async def _send_screener_request(self, payload):# {{{
 
-        print('sending screener request')
-        resp = self.session.post(self.SCREENER_URL, json=payload)
+        print('sending')
+        resp = await self._make_request('post', self.SCREENER_URL, json=payload)
 
         # data = resp.json()['finance']['result'][0]['quotes']
         try:
-            result = resp.json()
+            result = await resp.json()
         except:
-            print(resp.content)
+            cntnt = await resp.content
+            print(cntnt)
 
         if result['finance']['error']:
             print(payload)
@@ -179,7 +192,7 @@ class YFClient:
         return result['finance']['result'][0]
         # }}}
 
-    def _iter_screener_requests(self, payload, max_results):# {{{
+    async def _iter_screener_requests(self, payload, max_results):# {{{
 
         if not max_results:
             max_results = 10000
@@ -194,7 +207,7 @@ class YFClient:
 
 
         while True:
-            result = self._send_screener_request(payload)
+            result = await self._send_screener_request(payload)
             data.extend(result['quotes'])
 
             if len(result['quotes']) < payload['size']:
@@ -209,7 +222,63 @@ class YFClient:
 
         return data# }}}
 
-    def _get_quote_summary(self, ticker, modules=None):# {{{
+    async def get_equity_reference(self, region=['us'], max_results=10000, mcap_filter=100_000_000):# {{{
+
+        print(f'getting data for {region}')
+        payload = self._build_screener_payload(region=region, mcap_filter=mcap_filter)
+        res = await self._iter_screener_requests(payload, max_results)
+
+        data = pd.DataFrame(res)
+
+        cols = []
+        for c in self.SCREENER_COLS:
+            if c in data.columns:
+                cols.append(c)
+            else:
+                pass
+                # print(f'column {c} not found in ref data')
+
+        for c in data.columns:
+            if c not in self.SCREENER_COLS:
+                pass
+                # print(f'column {c} not found in defined screen columns')
+
+        print(f'GOT data')
+        return data[cols]# }}}
+
+    async def get_all_equity_reference(self):# {{{
+
+        regions = await self._get_region_reference()
+
+        result = pd.DataFrame()
+
+        tasks = []
+
+        # regions = regions[0:20]
+
+        for reg in regions:
+            # filtering us more strictly than other regions
+            # this is partly because of better mcap data coverage
+            # and partly because there are far more securities ther
+            if reg['code'] == 'us':
+                mcap_filter = 100_000_000
+            else:
+                mcap_filter = None
+            tmp = self.get_equity_reference(region=reg['code'], mcap_filter=mcap_filter)
+            tasks.append(tmp)
+
+
+        res = await asyncio.gather(*tasks)
+
+        for reg, r in zip(regions, res):
+            r['region_code'] = reg['code']
+            r['region_name'] = reg['name']
+
+        df = pd.concat([pd.DataFrame(x) for x in res])
+
+        return df# }}}
+
+    async def _get_quote_summary(self, ticker, modules=None):# {{{
 
         if isinstance(modules, str):
             modules = [modules]
@@ -220,66 +289,49 @@ class YFClient:
         modules = ','.join(modules)
         params = {'modules': modules, 'format': False}
 
-        res = self.session.get(url, params=params)
+        # res = self.session.get(url, params=params)
+        res = await self._make_request('get', url, params=params)
 
-        res_js = res.json()['quoteSummary']['result'][0]
+        res_js = (await res.json())['quoteSummary']['result'][0]
         return res_js# }}}
 
-    def _get_trending(self, region='us', count=5):# {{{
+    async def _get_trending(self, region='us', count=5):# {{{
+        print(f'getting {region}')
 
         url = self.TRENDING_URL + '/' + region.upper()
 
-        req = self.session.get(url, params={'count': count})
+        req = await self._make_request('get', url, params={'count': count})
 
-        resp = req.json()
+        resp = await req.json()
 
         try:
             data = resp['finance']['result'][0]['quotes']
             tmp = []
             for i in data:
                 tmp.append(i['symbol'])
+            print(f'got {region}')
             return tmp
         except Exception as e:
             print(resp)
             raise e
         # }}}
 
-    def get_equity_reference(self, region=['us'], max_results=10000, mcap_filter=100_000_000):# {{{
-
-        payload = self._build_screener_payload(region=region, mcap_filter=mcap_filter)
-        res = self._iter_screener_requests(payload, max_results)
-
-        data = pd.DataFrame(res)
-
-        cols = []
-        for c in self.SCREENER_COLS:
-            if c in data.columns:
-                cols.append(c)
-            else:
-                print(f'column {c} not found in ref data')
-
-        for c in data.columns:
-            if c not in self.SCREENER_COLS:
-                print(f'column {c} not found in defined screen columns')
-
-        return data[cols]# }}}
-
-    def _get_screener_fields(self, asset_class):# {{{
+    async def _get_screener_fields(self, asset_class):# {{{
 
         url = self.FIELD_URL.format(asset_class=asset_class)
 
-        req = self.session.get(url)
+        req = await self._make_request('get', url)
 
 
-        flds = req.json()['finance']['result'][0]['fields']
+        flds = (await req.json())['finance']['result'][0]['fields']
 
         flds = pd.DataFrame(flds).T.reset_index(drop=True)
 
         return flds# }}}
 
-    def _get_region_reference(self):# {{{
+    async def _get_region_reference(self):# {{{
 
-        flds = self._get_screener_fields('equity')
+        flds = await self._get_screener_fields('equity')
 
         regions = flds.loc[flds['fieldId']=='region']['labels'].iloc[0]
 
@@ -294,51 +346,39 @@ class YFClient:
 
         return clean_regions# }}}
 
-    def _get_quote(self, symbols):# {{{
+    async def _get_quote(self, symbols):# {{{
+
+        print(f'getting data for {symbols}')
 
         if isinstance(symbols, str):
             symbols = [symbols]
 
         url = self.QUOTE_URL
 
-        resp = self.session.get(url, params={'symbols': ','.join(symbols), 'fields': ','.join(self.QUOTE_COLUMNS)})
+        resp = await self._make_request('get', url, params={'symbols': ','.join(symbols), 'fields': ','.join(self.QUOTE_COLUMNS)})
 
-        resp = resp.json()
+        resp = await resp.json()
         if resp['quoteResponse']['error']:
             raise ValueError(f'{resp["quoteResponse"]["error"]}')
 
+        print(f'GOT data')
+
         return resp['quoteResponse']['result']# }}}
 
-    def get_all_equity_reference(self):# {{{
-
-        regions = self._get_region_reference()
-
-        result = pd.DataFrame()
-
-        for reg in regions:
-            # filtering us more strictly than other regions
-            # this is partly because of better mcap data coverage
-            # and partly because there are far more securities ther
-            if reg['code'] == 'us':
-                mcap_filter = 100_000_000
-            else:
-                mcap_filter = None
-            tmp = self.get_equity_reference(region=reg['code'], mcap_filter=mcap_filter)
-            tmp['region_code'] = reg['code']
-            tmp['region_name'] = reg['name']
-            result = result.append(tmp, ignore_index=True)
-            print(f'got data for {reg["name"]}')
-
-        return result# }}}
-
-    def get_quote(self, symbols, columns=None):# {{{
+    async def get_quote(self, symbols, columns=None):# {{{
 
         if isinstance(columns, str):
             columns = [columns]
 
-        data = self._get_quote(symbols)
 
-        df = pd.DataFrame(data)
+        chunks = [symbols[x:x+50] for x in range(0, len(symbols), 50)]
+        tasks = []
+        for chunk in chunks:
+            tasks.append(self._get_quote(chunk))
+
+        res = await asyncio.gather(*tasks)
+
+        df = pd.concat([pd.DataFrame(x) for x in res])
 
         if columns:
             if 'symbol' not in columns:
@@ -347,51 +387,15 @@ class YFClient:
 
         return df# }}}
 
-    def _hist_date_math(self, period, interval, start, end):# {{{
-        """ NOT USED Helper function to get date ranges for historical data queries"""
-        intra = ['1m','2m','5m','15m','30m','60m','90m','1h']
-
-        intra = interval.lower() in intra
-
-
-        if period:
-            start, end = self._get_dates_from_period(period, end)
-        else:
-
-            # if it is a string, then convert to TZ
-            if not isinstance(start, datetime.datetime):
-                start = pd.to_datetime(start, utc=True)
-            if not isinstance(end, datetime.datetime):
-                end = pd.to_datetime(end, utc=True)
-
-            # if it is already a datetime - then make sure there is a timezone
-            if not start.tzinfo:
-                start = pd.to_datetime(start, utc=True)
-            elif start.tzinfo != pytz.UTC:
-                start = start.tz_convert(pytz.UTC)
-            if not end.tzinfo:
-                end = pd.to_datetime(end, utc=True)
-            elif end.tzinfo != pytz.UTC:
-                end = end.tz_convert(pytz.UTC)
-
-
-            # if just a date specified and start/end are the same - get the whole day (implied)
-            if (interval.lower() in intra) and (start == end):
-                start = start.replace(hour=0, minute=0, second=0)
-                end = end.replace(hour=23, minute=59, second=59)
-
-            # this is where you want to retrieve one datapoint per ticker
-            if interval.lower() == '1d' and (start == end):
-                end = end + pd.Timedelta(days=1)# }}}
-
-    def _price_history(self, ticker, period=None, interval=None, start=None, end=None, adjust=True,# {{{
+    async def _price_history(self, ticker, period=None, interval=None, start=None, end=None, adjust=True,# {{{
             prepost=False):
 
+        print(f'getting price history for {ticker}')
         url = self.HISTORY_URL.format(symbol=ticker)
 
 
-        params = {'includeAdjustedClose': adjust, 'events': 'div,splits,capitalGain',
-                'interval': interval, 'includePrePost': prepost}
+        params = {'includeAdjustedClose': str(adjust).lower(), 'events': 'div,splits,capitalGain',
+                'interval': interval, 'includePrePost': str(prepost).lower()}
 
 
         assert isinstance(end, datetime.datetime)
@@ -408,9 +412,9 @@ class YFClient:
 
 
         # print(params)
-        resp = self.session.get(url, params=params)
+        resp = await self._make_request('get', url, params=params)
 
-        resp = resp.json()
+        resp = await resp.json()
         if 'finance' in resp.keys():
             raise ValueError(f'{resp["finance"]["error"]}')
         if resp['chart']['error']:
@@ -464,21 +468,23 @@ class YFClient:
         data.loc[(data['date_local'].dt.time>=thours['post_start']) &
                 (data['date_local'].dt.time< thours['post_end']), 'post_flag'] = 'Y'
 
+        print(f'GOT for ticker')
         return data# }}}
 
-    def get_price_history(self, tickers, period=None, interval=None, start=None, end=None,# {{{
+    async def get_price_history(self, tickers, period=None, interval=None, start=None, end=None,# {{{
             adjust=True, prepost=False):
 
         if isinstance(tickers, str):
             tickers = [tickers]
 
-        data = []
+        tasks = []
         for t in tickers:
             tmp = self._price_history(t, period=period, interval=interval, start=start,
                     end=end, adjust=adjust, prepost=prepost)
-            data.append(tmp)
+            tasks.append(tmp)
+        res = await asyncio.gather(*tasks)
 
-        return pd.concat(data)# }}}
+        return pd.concat(res)# }}}
 
     def _get_dates_from_period(self, period, asof=None):# {{{
 
@@ -543,24 +549,46 @@ class YFClient:
                 'post_start': convert_sess('post', 'start'),
                 'post_end': convert_sess('post', 'end')}# }}}
 
-    def get_trending(self, regions=['us', 'gb'], count=5):# {{{
+    async def get_trending(self, regions=['us', 'gb'], count=5):# {{{
 
         if isinstance(regions, str):
             regions = [regions]
 
         res = {}
+        tasks = []
         for reg in regions:
-            tmp = self._get_trending(region=reg, count=count)
-            res[reg] = tmp
+            tasks.append(self._get_trending(region=reg, count=count))
 
-        return res# }}}
+        res = await asyncio.gather(*tasks)
+
+        fres = {}
+        for r, rs in zip(regions, res):
+            fres[r] = rs
+
+
+        return fres# }}}
 
 
 
 yf = YFClient()
-yf.connect()
+await yf.connect()
 
-trend = yf.get_trending(regions=['us', 'gb'], count=10)
+
+# trend = await yf.get_trending(regions=['us', 'hk'], count=10)
+
+# qs = await yf.get_quote(['AAPL', 'TSLA'])
+
+# data = await yf.get_all_equity_reference()
+
+# data = await yf.get_equity_reference(region='us', max_results=10)
+
+
+data = await yf.get_price_history(['AAPL', 'TSLA'], period='1mo', end=pd.to_datetime('today',utc=True), interval='1d')
+
+
+await yf.disconnect()
+
+# trend = yf.get_trending(regions=['us', 'gb'], count=10)
 
 
 # x = yf._price_history('AAPL', period='1d', interval='1m')
