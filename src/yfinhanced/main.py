@@ -20,9 +20,8 @@ class YFClient:
     TRENDING_URL = BASE_URL + '/v1/finance/trending/'
     FIELD_URL = BASE_URL + '/v1/finance/screener/instrument/{asset_class}/fields'
     QUOTE_URL = BASE_URL + '/v7/finance/quote' #params symbol
-    RECCO_URL = BASE_URL + '/v6/finance/reccomendationsbysymbol/{symbol}'
+    RECCO_URL = BASE_URL + '/v6/finance/recommendationsbysymbol/{symbol}'
     PEER_ESG_URL = BASE_URL + '/v1/finance/esgPeerScores' #params symbol
-    QUOTE_TYP_URL = BASE_URL + '/v1/finance/quoteType' #params symbol
     SEARCH_URL = BASE_URL + '/v1/finance/search' # params q, quoteCount, newsCount, enableFuzzyQuery,
     HISTORY_URL = BASE_URL + '/v8/finance/chart/{symbol}'
 
@@ -568,8 +567,20 @@ class YFClient:
 
         return fres# }}}
 
+    async def _get_symbol_reccos(self, symbol):# {{{
+
+        if isinstance(symbol, str):
+            symbol = [symbol]
+
+        res = await self._make_request('get', self.RECCO_URL.format(symbol=','.join(symbol)))
+        res = await res.json()
+        return res# }}}
 
 
+# handle maximum 50 symbols per request in quote, symbol recco, quote summary
+# finish off symbol recco
+# implement search
+# implement esg peer score
 yf = YFClient()
 await yf.connect()
 
