@@ -24,6 +24,7 @@ class YFClient:
     PEER_ESG_URL = BASE_URL + '/v1/finance/esgPeerScores' #params symbol
     SEARCH_URL = BASE_URL + '/v1/finance/search' # params q, quoteCount, newsCount, enableFuzzyQuery,
     HISTORY_URL = BASE_URL + '/v8/finance/chart/{symbol}'
+    TIME_URL = BASE_URL + '/v6/finance/markettime' # params region, lang=en-US
 
     DUMMY_URL = 'https://finance.yahoo.com/quote/AAPL'
 
@@ -286,13 +287,33 @@ class YFClient:
 
         url = self.QUOTE_SUMMARY_URL + ticker
         modules = ','.join(modules)
-        params = {'modules': modules, 'format': False}
+        params = {'modules': modules, 'format': 'false'}
 
         # res = self.session.get(url, params=params)
         res = await self._make_request('get', url, params=params)
 
         res_js = (await res.json())['quoteSummary']['result'][0]
         return res_js# }}}
+
+    async def get_quote_summary(self, symbols, modules=None):# {{{
+
+        if isinstance(symbols, str):
+            symbols = [symbols]
+
+
+        tasks = []
+
+        for symb in symbols:
+            tasks.append(self._get_quote_summary(symb, modules=modules))
+
+        res = await asyncio.gather(*tasks)
+
+
+        fres = {}
+        for symb, qs in zip(symbols, res):
+            fres[symb] = qs
+
+        return fres# }}}
 
     async def _get_trending(self, region='us', count=5):# {{{
         print(f'getting {region}')
@@ -567,7 +588,7 @@ class YFClient:
 
         return fres# }}}
 
-    async def _get_symbol_reccos(self, symbol):# {{{
+    async def _get_symbol_recos(self, symbol):# {{{
 
         if isinstance(symbol, str):
             symbol = [symbol]
@@ -576,13 +597,202 @@ class YFClient:
         res = await res.json()
         return res# }}}
 
+    async def get_symbol_recos(self, symbols):# {{{
 
-# handle maximum 50 symbols per request in quote, symbol recco, quote summary
-# finish off symbol recco
+        chunks = [symbols[x:x+50] for x in range(0, len(symbols), 50)]
+        tasks = []
+        for chunk in chunks:
+            tasks.append(self._get_symbol_recos(chunk))
+
+        res = await asyncio.gather(*tasks)
+
+        fres = []
+        for r in res:
+            tmp = r['finance']['result']
+
+            for smb in tmp:
+                fres.append(smb)
+
+        # df = pd.concat([pd.DataFrame(x) for x in res])
+
+        df = []
+
+        for r in fres:
+            reco = r['recommendedSymbols']
+            reco_symbs = [t['symbol'] for t in reco]
+            reco_score = [t['score'] for t in reco]
+            symb = [r['symbol']] * len(reco)
+            df.append({'symbol': symb, 'reco_symbol': reco_symbs,
+                'reco_score': reco_score})
+
+        return pd.concat([pd.DataFrame(x) for x in df])# }}}
+
+    async def _get_markettime(self, region):# {{{
+
+        res = await self._make_request('get', self.TIME_URL,
+                params={'lang': 'en-US', 'region': region})
+
+        return await res.json()# }}}
+
+    async def get_markettime(self, regions=['ar', 'au', 'br', 'ca', 'us', 'cn', 'de', 'es',#{{{
+        'fr', 'hk', 'in', 'it', 'jp', 'kr', 'mx', 'nz', 'sg', 'tw']):
+
+        if isinstance(regions, str):
+            regions = [regions]
+
+        regions = [x.lower() for x in regions]
+
+        tasks = []
+        for reg in regions:
+            tasks.append(self._get_markettime(reg))
+
+        res = await asyncio.gather(*tasks)
+
+        fres = {}
+        for reg, tme in zip(regions, res):
+            fres[reg] = tme
+
+        ffres = []
+
+        for nme, mkt in fres.items():
+
+            try:
+                t = mkt['finance']['marketTimes'][0]['marketTime'][0]
+            except:
+                print(mkt)
+                print(f'couldnt find data for {nme}')
+                continue
+
+            tmp = pd.Series({
+                'name': nme,
+                'short_yname': t['id'],
+                'yname': t['name'],
+                'y_mkt_id': t['yfit_market_id'],
+                'close': t['close'],
+                'msg': t['message'],
+                'open': t['open'],
+                'time': t['time'],
+                'dst_active': t['timezone'][0]['dst'],
+                'gmtoffset': t['timezone'][0]['gmtoffset'],
+                'timezone_code': t['timezone'][0]['short'],
+                'pytz_name': t['timezone'][0]['$text']})
+
+            ffres.append(tmp)
+
+        return pd.concat(ffres, axis=1).T# }}}
+
+    async def _get_esg_score(self, symbol, count=5):# {{{
+
+
+        res = await self._make_request('get', self.PEER_ESG_URL, params={'symbol': symbol,
+            'count': count})
+
+        return await res.json()# }}}
+
+    async def get_esg_peer_scores(self, symbols, count=5):# {{{
+
+        if isinstance(symbols, str):
+            symbols = [symbols]
+
+        tasks = []
+
+        for sym in symbols:
+            tasks.append(self._get_esg_score(sym, count))
+
+        res = await asyncio.gather(*tasks)
+
+        fres = {}
+
+        for sym, r in zip(symbols, res):
+            fres[sym] = r
+
+
+        final = []
+        for sym, res in fres.items():
+
+            list_res = res['esgPeerScores']['result'][0]['esgPeerScoresDocuments']
+
+            for d in list_res:
+                tmp = {}
+                tmp['ticker'] = sym
+                tmp['peer_ticker'] = d['ticker']
+                tmp['peer_name'] = d['companyshortname']
+                tmp['esg_score'] = d['esgScore']['raw']
+                tmp['environment_score'] = d['environmentScore']['raw']
+                tmp['governance_score'] = d['governanceScore']['raw']
+                tmp['social_score'] = d['socialScore']['raw']
+                final.append(tmp)
+
+        return pd.DataFrame(final, index=range(0, len(final)))# }}}
+
+    async def _get_search(self, query, stype='quote', count=5, fuzzy=False):# {{{
+
+        if stype.lower() == 'quote':
+            news_count = 0
+            quote_count = count
+        elif stype.lower() == 'news':
+            news_count = count
+            quote_count = 0
+
+        params = {'q': query, 'quoteCount': quote_count, 'newsCount': news_count,
+                'enableFuzzyQuery': str(fuzzy).lower()}
+
+        res = await self._make_request('get', self.SEARCH_URL, params=params)
+
+        res = await res.json()
+
+        if stype.lower() == 'quote':
+            return self._parse_quote_search(res)
+        elif stype.lower() == 'news':
+            return self._parse_news_search(res) # }}}
+
+    async def get_search(self, queries, stype='quote', count=5, fuzzy=False):# {{{
+
+        if isinstance(queries, str):
+            queries = [queries]
+
+        tasks = []
+        for q in queries:
+            tasks.append(self._get_search(q, stype=stype, count=count, fuzzy=fuzzy))
+
+        res = await asyncio.gather(*tasks)
+
+        fres = []
+        for q, res in zip(queries, res):
+            res['query_string'] = q
+            fres.append(res)
+
+        return pd.concat(fres)# }}}
+
+    def _parse_quote_search(self, res):# {{{
+
+        res = res['quotes']
+
+        return pd.DataFrame(res)# }}}
+
+    def _parse_news_search(self, res):# {{{
+
+        res = res['news']
+
+        return pd.DataFrame(res)# }}}
+
+
+
 # implement search
-# implement esg peer score
-yf = YFClient()
-await yf.connect()
+# yf = YFClient()
+# await yf.connect()
+
+
+# s = await yf.get_search(['BYND', 'Tesla'], stype='news', count=200)
+# 
+
+# await yf.disconnect()
+# 
+
+
+# esg = await yf.get_esg_peer_scores(['AAPL', 'TSLA'], count=20)
+
+# times = await yf.get_markettime()
 
 
 # trend = await yf.get_trending(regions=['us', 'hk'], count=10)
@@ -594,11 +804,11 @@ await yf.connect()
 # data = await yf.get_equity_reference(region='us', max_results=10)
 
 
-data = await yf.get_price_history(['AAPL', 'TSLA'], period='1mo', end=pd.to_datetime('today',utc=True), interval='1d')
+# data = await yf.get_price_history(['AAPL', 'TSLA'], period='1mo', end=pd.to_datetime('today',utc=True), interval='1d')
 
 
-await yf.disconnect()
-
+# await yf.disconnect()
+# 
 # trend = yf.get_trending(regions=['us', 'gb'], count=10)
 
 
