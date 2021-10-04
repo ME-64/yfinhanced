@@ -181,7 +181,7 @@ class YFClient:
         try:
             result = await resp.json()
         except:
-            cntnt = await resp.content
+            cntnt = await resp.text()
             print(cntnt)
 
         if result['finance']['error']:
