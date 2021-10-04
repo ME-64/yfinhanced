@@ -182,7 +182,8 @@ class YFClient:
             result = await resp.json()
         except:
             cntnt = await resp.text()
-            print(cntnt)
+            print(payload)
+            raise ValueError(f'couldnt convert to json {cntnt}')
 
         if result['finance']['error']:
             print(payload)
