@@ -355,7 +355,7 @@ class YFClient:
             return tmp
         except Exception as e:
             print(resp['finance'])
-            return {region: []}
+            return []
         # }}}
 
     async def _get_screener_fields(self, asset_class):# {{{
@@ -552,6 +552,7 @@ class YFClient:
         # }}}
 
     def _get_dates_from_period(self, period, asof=None):# {{{
+        """valid are 1d, 1mo, 1w, 1y, ytd, mtd, qtd"""
 
         if not asof:
             asof = pd.to_datetime('today')
@@ -566,7 +567,7 @@ class YFClient:
         elif asof.tzinfo != pytz.UTC:
             asof = asof.tz_convert(pytz.UTC)
 
-        if 'd' in period.lower():
+        if 'd' in period.lower() and period.lower() not in ['ytd', 'mtd', 'qtd']:
             start = asof - pd.Timedelta(days=int(period[:-1]))
 
         elif 'mo' in period.lower():
@@ -575,7 +576,7 @@ class YFClient:
         elif 'w' in period.lower():
             start = asof - relativedelta.relativedelta(weeks=int(period[:-1]))
 
-        elif 'y' in period.lower():
+        elif 'y' in period.lower() and period.lower() not in ['ytd']:
             start = asof - relativedelta.relativedelta(years=int(period[:-1]))
 
         elif period.lower() == 'ytd':
@@ -670,7 +671,11 @@ class YFClient:
             df.append({'symbol': symb, 'reco_symbol': reco_symbs,
                 'reco_score': reco_score})
 
-        return pd.concat([pd.DataFrame(x) for x in df])# }}}
+        if df:
+            return pd.concat([pd.DataFrame(x) for x in df])
+        else:
+            return pd.DataFrame(columns=['symbol', 'reco_symbol', 'reco_score'])
+        # }}}
 
     async def _get_markettime(self, region):# {{{
 
@@ -833,77 +838,4 @@ class YFClient:
         return res# }}}
 
 
-
-# implement search
-# yf = YFClient()
-# await yf.connect()
-
-
-# s = await yf.get_search(['BYND', 'Tesla'], stype='news', count=200)
-# 
-
-# await yf.disconnect()
-# 
-
-
-# esg = await yf.get_esg_peer_scores(['AAPL', 'TSLA'], count=20)
-
-# times = await yf.get_markettime()
-
-
-# trend = await yf.get_trending(regions=['us', 'hk'], count=10)
-
-# qs = await yf.get_quote(['AAPL', 'TSLA'])
-
-# data = await yf.get_all_equity_reference()
-
-# data = await yf.get_equity_reference(region='us', max_results=10)
-
-
-# data = await yf.get_price_history(['AAPL', 'TSLA'], period='1mo', end=pd.to_datetime('today',utc=True), interval='1d')
-
-
-# await yf.disconnect()
-# 
-# trend = yf.get_trending(regions=['us', 'gb'], count=10)
-
-
-# x = yf._price_history('AAPL', period='1d', interval='1m')
-
-# df= yf._price_history('GOOG', start=pd.to_datetime('2021-09-29 00:00:00', utc=True),
-#             end=pd.to_datetime('2021-09-29 11:59:59', utc=True), interval='5m', prepost=True)
-
-
-
-# start = pd.to_datetime('2021-09-01 00:00:00', utc=True)
-# end = pd.to_datetime('2021-09-30 23:00:00', utc=True)
-# 
-# df = yf._price_history('^GSPC', start=start, end=end, interval='5m', prepost=False)
-# 
-# df['hour'] = df['date_local'].dt.hour
-# df['minute'] = df['date_local'].dt.minute
-# df['time'] = df['date_local'].dt.time
-
-# x = yf.get_price_history('AZN.L', period='1mo', interval='1d', adjust=True)
-# x = yf.get_price_history('AZN.L', period='1mo', interval='1d', adjust=True)
-
-# x = yf.get_price_history('AAPL', start='20210505', end='20210505', interval='1d', adjust=True)
-
-# ref = yf.get_all_equity_reference()
-
-
-# quotes = yf._get_quote(test['symbol'].tolist())
-
-# qs = yf._get_quote_summary('GME')
-
-# q = yf.get_quote(['GBPUSD=X', 'EURUSD=X', 'AAPL'], ['bid', 'ask'])
-# # q = yf.get_quote(['BTC-USD'])
 # q['spread'] = ((q['ask'] - q['bid']) / ((q['ask'] + q['bid']) / 2)) * 10000
-# q
-
-
-
-# test = yf.get_equity_reference(region='us', max_results=100)
-
-# df = yf.get_equity_reference(region='us', max_results=None)
-# uk = yf.get_equity_reference(region='gb', max_results=None)
