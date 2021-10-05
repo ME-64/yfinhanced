@@ -14,7 +14,8 @@ import asyncio
 
 class YFClient:
 
-    BASE_URL = 'https://query1.finance.yahoo.com'# {{{
+    snake_pattern = re.compile(r'(?<!^)(?=[A-Z])')# {{{
+    BASE_URL = 'https://query1.finance.yahoo.com'
     SCREENER_URL = BASE_URL + '/v1/finance/screener'
     QUOTE_SUMMARY_URL = BASE_URL + '/v10/finance/quoteSummary/'
     TRENDING_URL = BASE_URL + '/v1/finance/trending/'
@@ -54,7 +55,7 @@ class YFClient:
             'preMarketVolume', 'preMarketOpen', 'currentTradingPeriod', 'tradingPeriods',
             'preMarketPrice', 'preMarketDayHigh', 'preMarketDayLow', 'preMarketPreviousClose',
             'regularMarketPreviousClose', 'postMarketPreviousClose', 'postMarketVolume',
-            'marketState', 'postMarketTime', 'regularMarketClose', 'last', 'trade',
+            'postMarketTime', 'regularMarketClose', 'last', 'trade',
             'postMarketChangePercent', 'postMarketPrice', 'postMarketChange'] #not used rn
 
 
@@ -82,6 +83,14 @@ class YFClient:
                 headers=self.HEADERS, cookies=self.cookies)
 
 
+        # }}}
+
+    async def get_new_crumb(self):# {{{
+        self.crumb, self.cookies = self._get_crumb()
+        await self.session.close()
+        connector = aiohttp.TCPConnector(limit=10)
+        self.session = aiohttp.ClientSession(connector=connector,
+                headers=self.HEADERS, cookies=self.cookies)
         # }}}
 
     def _get_crumb(self):# {{{
@@ -187,7 +196,12 @@ class YFClient:
 
         if result['finance']['error']:
             print(payload)
-            raise ValueError(f'{result["finance"]["error"]}')
+            if result['finance']['error']['description'] == 'Invalid Crumb':
+                await self.get_new_crumb()
+                print('getting new crumb')
+                return await self._send_screener_request(payload)
+            else:
+                raise ValueError(f'{result["finance"]["error"]}')
 
         # return pd.DataFrame(data)
         return result['finance']['result'][0]
@@ -229,23 +243,25 @@ class YFClient:
         payload = self._build_screener_payload(region=region, mcap_filter=mcap_filter)
         res = await self._iter_screener_requests(payload, max_results)
 
-        data = pd.DataFrame(res)
+        data = pd.DataFrame(columns=self.SCREENER_COLS)
+        data = data.append(pd.DataFrame(res))
 
-        cols = []
-        for c in self.SCREENER_COLS:
-            if c in data.columns:
-                cols.append(c)
-            else:
-                pass
-                # print(f'column {c} not found in ref data')
 
-        for c in data.columns:
-            if c not in self.SCREENER_COLS:
-                pass
-                # print(f'column {c} not found in defined screen columns')
+        # cols = []
+        # for c in self.SCREENER_COLS:
+        #     if c in data.columns:
+        #         cols.append(c)
+        #     else:
+        #         pass
+        #         # print(f'column {c} not found in ref data')
+
+        # for c in data.columns:
+        #     if c not in self.SCREENER_COLS:
+        #         pass
+        #         # print(f'column {c} not found in defined screen columns')
 
         print(f'GOT data')
-        return data[cols]# }}}
+        return data[self.SCREENER_COLS]# }}}
 
     async def get_all_equity_reference(self):# {{{
 
@@ -293,8 +309,13 @@ class YFClient:
         # res = self.session.get(url, params=params)
         res = await self._make_request('get', url, params=params)
 
-        res_js = (await res.json())['quoteSummary']['result'][0]
-        return res_js# }}}
+        res_js = await res.json()
+
+        if res_js['quoteSummary']['result']:
+            return res_js['quoteSummary']['result'][0]
+        else:
+            print(res_js['quoteSummary']['error'])
+            return {} # }}}
 
     async def get_quote_summary(self, symbols, modules=None):# {{{
 
@@ -333,8 +354,8 @@ class YFClient:
             print(f'got {region}')
             return tmp
         except Exception as e:
-            print(resp)
-            raise e
+            print(resp['finance'])
+            return {region: []}
         # }}}
 
     async def _get_screener_fields(self, asset_class):# {{{
@@ -369,11 +390,6 @@ class YFClient:
 
     async def _get_quote(self, symbols):# {{{
 
-        print(f'getting data for {symbols}')
-
-        if isinstance(symbols, str):
-            symbols = [symbols]
-
         url = self.QUOTE_URL
 
         resp = await self._make_request('get', url, params={'symbols': ','.join(symbols), 'fields': ','.join(self.QUOTE_COLUMNS)})
@@ -382,14 +398,20 @@ class YFClient:
         if resp['quoteResponse']['error']:
             raise ValueError(f'{resp["quoteResponse"]["error"]}')
 
-        print(f'GOT data')
-
-        return resp['quoteResponse']['result']# }}}
+        res = resp['quoteResponse']['result']
+        if res:
+            return res
+        else:
+            return [{'symbol': x} for x in symbols]
+        # }}}
 
     async def get_quote(self, symbols, columns=None):# {{{
 
         if isinstance(columns, str):
             columns = [columns]
+
+        if isinstance(symbols, str):
+            symbols = [symbols]
 
 
         chunks = [symbols[x:x+50] for x in range(0, len(symbols), 50)]
@@ -399,12 +421,17 @@ class YFClient:
 
         res = await asyncio.gather(*tasks)
 
-        df = pd.concat([pd.DataFrame(x) for x in res])
+        empty_df = pd.DataFrame(columns=self.QUOTE_COLUMNS)
+
+        df = pd.concat([empty_df] + [pd.DataFrame(x) for x in res])
 
         if columns:
             if 'symbol' not in columns:
                 columns += ['symbol']
             df = df[columns]
+
+        return df
+        df.columns = self.camel_to_snake(list(df.columns))
 
         return df# }}}
 
@@ -437,12 +464,15 @@ class YFClient:
 
         resp = await resp.json()
         if 'finance' in resp.keys():
-            raise ValueError(f'{resp["finance"]["error"]}')
+            print(f'{resp["finance"]["error"]}')
+            return
         if resp['chart']['error']:
-            raise ValueError(f'{resp["chart"]["error"]}')
+            print(f'{resp["chart"]["error"]}')
+            return
 
         if not resp['chart']['result'][0]['indicators']['quote'][0]:
-            raise ValueError(f"no results found for period")
+            print(f"no results found for period")
+            return
 
         meta = resp['chart']['result'][0]['meta']
         resp = resp['chart']['result'][0]
@@ -498,6 +528,9 @@ class YFClient:
         if isinstance(tickers, str):
             tickers = [tickers]
 
+        if not end:
+            end = pd.to_datetime('now', utc=True)
+
         tasks = []
         for t in tickers:
             tmp = self._price_history(t, period=period, interval=interval, start=start,
@@ -505,7 +538,18 @@ class YFClient:
             tasks.append(tmp)
         res = await asyncio.gather(*tasks)
 
-        return pd.concat(res)# }}}
+        fres = []
+        for r in res:
+            if r is not None:
+                fres.append(r)
+
+        if fres:
+            return pd.concat(fres)
+        else:
+            return pd.DataFrame(columns=['ticker', 'date', 'close', 'volume', 'low', 'high',
+                'adjclose', 'ratio', 'adjopen', 'adjhigh', 'adjlow', 'interval', 'date_local',
+                'regular_flag', 'pre_flag', 'post_flag'])
+        # }}}
 
     def _get_dates_from_period(self, period, asof=None):# {{{
 
@@ -711,7 +755,10 @@ class YFClient:
         final = []
         for sym, res in fres.items():
 
-            list_res = res['esgPeerScores']['result'][0]['esgPeerScoresDocuments']
+            try:
+                list_res = res['esgPeerScores']['result'][0]['esgPeerScoresDocuments']
+            except:
+                continue
 
             for d in list_res:
                 tmp = {}
@@ -776,6 +823,14 @@ class YFClient:
         res = res['news']
 
         return pd.DataFrame(res)# }}}
+
+    def camel_to_snake(self, cols):# {{{
+        if isinstance(cols, str):
+            cols = [cols]
+        res = []
+        for c in cols:
+            res.append(self.snake_pattern.sub('_', str(c)).lower())
+        return res# }}}
 
 
 
