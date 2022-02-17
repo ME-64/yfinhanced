@@ -56,7 +56,14 @@ class YFClient:
             'preMarketPrice', 'preMarketDayHigh', 'preMarketDayLow', 'preMarketPreviousClose',
             'regularMarketPreviousClose', 'postMarketPreviousClose', 'postMarketVolume',
             'postMarketTime', 'regularMarketClose', 'last', 'trade',
-            'postMarketChangePercent', 'postMarketPrice', 'postMarketChange'] #not used rn
+            'postMarketChangePercent', 'postMarketPrice', 'postMarketChange',
+            'language', 'region', 'quoteType', 'quoteSourceName', 'triggerable',
+            'sourceInterval', 'exchangeDataDelayedBy', 'tradeable', 'firstTradeDateMilliseconds',
+            'priceHint', 'regularMarketTime', 'regularMarketDayHigh', 'regularMarketDayRange',
+            'regularMarketDayLow', 'fullExchangeName', 'fiftyTwoWeekLowChange', 'fiftyTwoWeekLowChangePercent',
+            'fiftyTwoWeekRange', 'fiftyTwoWeekHighChange', 'fiftyTwoWeekHighChangePercent',
+            'exchange', 'exchangeTimezoneName', 'exchangeTimezoneShortName', 'gmtOffSetMilliseconds',
+            'market', 'esgPopulated', 'sharesOutstanding'] #not used rn
 
 
     SCREENER_COLS = ['symbol', 'exchange', 'currency', 'fullExchangeName', 'quoteSourceName', 
@@ -64,6 +71,9 @@ class YFClient:
             'priceHint', 'market', 'messageBoardId', 'financialCurrency', 'sourceInterval', 'exchangeDataDelayedBy',
             'exchangeTimezoneName', 'exchangeTimezoneShortName', 'gmtOffSetMilliseconds', 'prevName', 'nameChangeDate']
 
+    PRICE_HISTORY_COLS = ['symbol', 'date', 'close', 'volume', 'low', 'high',
+                'adjclose', 'ratio', 'adjopen', 'adjhigh', 'adjlow', 'interval', 'date_local',
+                'trading_period']
 
 # }}}
 
@@ -117,6 +127,193 @@ class YFClient:
 
     async def disconnect(self):# {{{
         await self.session.close()# }}}
+
+    async def _get_quote(self, symbols):# {{{
+
+        url = self.QUOTE_URL
+
+        resp = await self._make_request('get', url, params={'symbols': ','.join(symbols), 'fields': ','.join(self.QUOTE_COLUMNS)})
+
+        resp = await resp.json()
+        if resp['quoteResponse']['error']:
+            raise ValueError(f'{resp["quoteResponse"]["error"]}')
+
+        res = resp['quoteResponse']['result']
+        if res:
+            return res
+        else:
+            return [{'symbol': x} for x in symbols]
+        # }}}
+
+    async def get_quote(self, symbols, columns=None):# {{{
+
+        if isinstance(columns, str):
+            columns = [columns]
+
+        if isinstance(symbols, str):
+            if ',' in symbols:
+                symbols = symbols.split(',')
+            else:
+                symbols = [symbols]
+
+
+        chunks = [symbols[x:x+50] for x in range(0, len(symbols), 50)]
+        tasks = []
+        for chunk in chunks:
+            tasks.append(self._get_quote(chunk))
+
+        res = await asyncio.gather(*tasks)
+
+        empty_df = pd.DataFrame(columns=self.QUOTE_COLUMNS)
+
+        df = pd.concat([empty_df] + [pd.DataFrame(x) for x in res])
+
+        if columns:
+            if 'symbol' not in columns:
+                columns += ['symbol']
+            df = df[columns]
+
+        for c in df.columns:
+            if c not in self.QUOTE_COLUMNS:
+                print(f'column {c} found in quote df but not in self.QUOTE_COLUMNS')
+
+        for c in self.QUOTE_COLUMNS:
+            if c not in df.columns:
+                df[c] = None
+
+        return df
+        # df.columns = self.camel_to_snake(list(df.columns))
+
+        # return df# }}}
+
+    async def _price_history(self, symbol, interval=None, start=None, end=None, adjust=True,# {{{
+            prepost=False):
+
+        print(f'getting price history for {symbol}')
+
+        assert isinstance(end, datetime.datetime); assert end.tzinfo
+        assert isinstance(start, datetime.datetime); assert start.tzinfo
+
+        url = self.HISTORY_URL.format(symbol=symbol)
+
+
+        params = {'includeAdjustedClose': str(adjust).lower(), 'events': 'div,splits,capitalGain',
+                'interval': interval, 'includePrePost': str(prepost).lower()}
+
+
+
+        # put the start and end in (micro) seconds
+        params['period1'] = int(time.mktime(start.timetuple()))
+        params['period2'] = int(time.mktime(end.timetuple()))
+
+
+
+        resp = await self._make_request('get', url, params=params)
+
+        resp = await resp.json()
+        if 'finance' in resp.keys():
+            print('finance error')
+            print(f'{resp["finance"]["error"]}')
+            return
+        if resp['chart']['error']:
+            if resp['chart']['error']['description'][0:35] == 'Data doesn\'t exist for startDate = ':
+                print("no results found for period")
+                return
+            else:
+                print('chart error')
+                print(f'{resp["chart"]["error"]}')
+                return
+
+        if not resp['chart']['result'][0]['indicators']['quote'][0]:
+            print(f"no results found for period")
+            return
+
+        meta = resp['chart']['result'][0]['meta']
+        resp = resp['chart']['result'][0]
+
+
+        timestamps = pd.to_datetime(resp['timestamp'], unit='s', utc=True)
+
+        data = pd.DataFrame(resp['indicators']['quote'][0], index=timestamps)
+
+        # adjusting other columns too
+        if adjust and 'adjclose' in resp['indicators'].keys():
+            data['adjclose'] = resp['indicators']['adjclose'][0]['adjclose']
+            data['ratio'] = data['adjclose'] / data['close']
+            data['adjopen'] = data['open'] * data['ratio']
+            data['adjhigh'] = data['high'] * data['ratio']
+            data['adjlow'] = data['low'] * data['ratio']
+        # elif adjust and 'adjclose' not in resp['indicators'].keys():
+        #     data['adjclose'] = data['close'].copy()
+        #     data['ratio'] = 1
+        #     data['adjopen'] = data['open'].copy()
+        #     data['adjhigh'] = data['high'].copy()
+        #     data['adjlow'] = data['low'].copy()
+
+
+        data = data.reset_index().rename(columns={'index': 'date'})
+        data['symbol'] = symbol
+        data['interval'] = interval.lower()
+
+        cols = list(data.columns)
+        cols.remove('symbol')
+        cols.remove('date')
+
+
+        data = data[['symbol', 'date'] + cols]
+
+        # now for pre and post items
+        thours = self._get_session_from_tperiod(meta)
+
+        data['date_local'] = data['date'].dt.tz_convert(thours['tz'])
+
+        data['trading_period'] = None
+
+        data.loc[(data['date_local'].dt.time>=thours['regular_start']) &
+                (data['date_local'].dt.time < thours['regular_end']), 'trading_period'] = 'regular'
+
+        data.loc[(data['date_local'].dt.time>=thours['pre_start']) &
+                (data['date_local'].dt.time < thours['pre_end']), 'trading_period'] = 'pre'
+
+        data.loc[(data['date_local'].dt.time>=thours['post_start']) &
+                (data['date_local'].dt.time< thours['post_end']), 'trading_period'] = 'post'
+
+        print(f'GOT for {symbol}')
+        return data# }}}
+
+    async def get_price_history(self, symbols, interval, start, end,# {{{
+            adjust=True, prepost=False):
+        """
+        interval: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1h, 1d, 5d, 1wk, 1mo, 3mo
+        adjust can only work for intraday
+        todo: workout what adjustment intraday actually does do (find a symbol that has recent one)
+        volume seems to only populate in normal market hours
+        start and end must be datetimes with timezones
+
+        if a ticker isn't found, it won't be returned in the data set
+        if no tickers are found; empty dataset is returned
+        """
+
+        if isinstance(symbols, str):
+            symbols = [symbols]
+
+        tasks = []
+        for t in symbols:
+            tmp = self._price_history(t, interval=interval, start=start,
+                    end=end, adjust=adjust, prepost=prepost)
+            tasks.append(tmp)
+        res = await asyncio.gather(*tasks)
+
+        fres = []
+        for r in res:
+            if r is not None:
+                fres.append(r)
+
+        if fres:
+            return pd.concat(fres)
+        else:
+            return pd.DataFrame(columns=self.PRICE_HISTORY_COLS)
+        # }}}
 
     def _build_screener_payload(self,# {{{
             sort_field='intradaymarketcap', sort_type='DESC', quote_type='EQUITY',
@@ -388,169 +585,6 @@ class YFClient:
 
         return clean_regions# }}}
 
-    async def _get_quote(self, symbols):# {{{
-
-        url = self.QUOTE_URL
-
-        resp = await self._make_request('get', url, params={'symbols': ','.join(symbols), 'fields': ','.join(self.QUOTE_COLUMNS)})
-
-        resp = await resp.json()
-        if resp['quoteResponse']['error']:
-            raise ValueError(f'{resp["quoteResponse"]["error"]}')
-
-        res = resp['quoteResponse']['result']
-        if res:
-            return res
-        else:
-            return [{'symbol': x} for x in symbols]
-        # }}}
-
-    async def get_quote(self, symbols, columns=None):# {{{
-
-        if isinstance(columns, str):
-            columns = [columns]
-
-        if isinstance(symbols, str):
-            symbols = [symbols]
-
-
-        chunks = [symbols[x:x+50] for x in range(0, len(symbols), 50)]
-        tasks = []
-        for chunk in chunks:
-            tasks.append(self._get_quote(chunk))
-
-        res = await asyncio.gather(*tasks)
-
-        empty_df = pd.DataFrame(columns=self.QUOTE_COLUMNS)
-
-        df = pd.concat([empty_df] + [pd.DataFrame(x) for x in res])
-
-        if columns:
-            if 'symbol' not in columns:
-                columns += ['symbol']
-            df = df[columns]
-
-        return df
-        df.columns = self.camel_to_snake(list(df.columns))
-
-        return df# }}}
-
-    async def _price_history(self, ticker, period=None, interval=None, start=None, end=None, adjust=True,# {{{
-            prepost=False):
-
-        print(f'getting price history for {ticker}')
-        url = self.HISTORY_URL.format(symbol=ticker)
-
-
-        params = {'includeAdjustedClose': str(adjust).lower(), 'events': 'div,splits,capitalGain',
-                'interval': interval, 'includePrePost': str(prepost).lower()}
-
-
-        assert isinstance(end, datetime.datetime)
-        assert end.tz
-        if period:
-            start, end = self._get_dates_from_period(period, end)
-        else:
-            assert isinstance(start, datetime.datetime)
-            assert start.tz
-
-        params['period1'] = int(time.mktime(start.timetuple()))
-        params['period2'] = int(time.mktime(end.timetuple()))
-
-
-
-        # print(params)
-        resp = await self._make_request('get', url, params=params)
-
-        resp = await resp.json()
-        if 'finance' in resp.keys():
-            print(f'{resp["finance"]["error"]}')
-            return
-        if resp['chart']['error']:
-            print(f'{resp["chart"]["error"]}')
-            return
-
-        if not resp['chart']['result'][0]['indicators']['quote'][0]:
-            print(f"no results found for period")
-            return
-
-        meta = resp['chart']['result'][0]['meta']
-        resp = resp['chart']['result'][0]
-
-
-        timestamps = pd.to_datetime(resp['timestamp'], unit='s', utc=True)
-
-        data = pd.DataFrame(resp['indicators']['quote'][0], index=timestamps)
-
-        # adjusting other columns too
-        if adjust and 'adjclose' in resp['indicators'].keys():
-            data['adjclose'] = resp['indicators']['adjclose'][0]['adjclose']
-            data['ratio'] = data['adjclose'] / data['close']
-            data['adjopen'] = data['open'] * data['ratio']
-            data['adjhigh'] = data['high'] * data['ratio']
-            data['adjlow'] = data['low'] * data['ratio']
-
-        data = data.reset_index().rename(columns={'index': 'date'})
-        data['ticker'] = ticker
-        data['interval'] = interval.lower()
-
-        cols = list(data.columns)
-        cols.remove('ticker')
-        cols.remove('date')
-
-
-        data = data[['ticker', 'date'] + cols]
-
-        # now for pre and post items
-        thours = self._get_session_from_tperiod(meta)
-
-        data['date_local'] = data['date'].dt.tz_convert(thours['tz'])
-
-        data['regular_flag'] = 'N'
-        data['pre_flag'] = 'N'
-        data['post_flag'] = 'N'
-
-        data.loc[(data['date_local'].dt.time>=thours['regular_start']) &
-                (data['date_local'].dt.time < thours['regular_end']), 'regular_flag'] = 'Y'
-
-        data.loc[(data['date_local'].dt.time>=thours['pre_start']) &
-                (data['date_local'].dt.time < thours['pre_end']), 'pre_flag'] = 'Y'
-
-        data.loc[(data['date_local'].dt.time>=thours['post_start']) &
-                (data['date_local'].dt.time< thours['post_end']), 'post_flag'] = 'Y'
-
-        print(f'GOT for ticker')
-        return data# }}}
-
-    async def get_price_history(self, tickers, period=None, interval=None, start=None, end=None,# {{{
-            adjust=True, prepost=False):
-
-        if isinstance(tickers, str):
-            tickers = [tickers]
-
-        if not end:
-            end = pd.to_datetime('now', utc=True)
-
-        tasks = []
-        for t in tickers:
-            tmp = self._price_history(t, period=period, interval=interval, start=start,
-                    end=end, adjust=adjust, prepost=prepost)
-            tasks.append(tmp)
-        res = await asyncio.gather(*tasks)
-
-        fres = []
-        for r in res:
-            if r is not None:
-                fres.append(r)
-
-        if fres:
-            return pd.concat(fres)
-        else:
-            return pd.DataFrame(columns=['ticker', 'date', 'close', 'volume', 'low', 'high',
-                'adjclose', 'ratio', 'adjopen', 'adjhigh', 'adjlow', 'interval', 'date_local',
-                'regular_flag', 'pre_flag', 'post_flag'])
-        # }}}
-
     def _get_dates_from_period(self, period, asof=None):# {{{
         """valid are 1d, 1mo, 1w, 1y, ytd, mtd, qtd"""
 
@@ -685,7 +719,7 @@ class YFClient:
         return await res.json()# }}}
 
     async def get_markettime(self, regions=['ar', 'au', 'br', 'ca', 'us', 'cn', 'de', 'es',#{{{
-        'fr', 'hk', 'in', 'it', 'jp', 'kr', 'mx', 'nz', 'sg', 'tw']):
+        'fr', 'hk', 'in', 'it', 'jp', 'kr', 'mx', 'nz', 'sg', 'tw', 'gb']):
 
         if isinstance(regions, str):
             regions = [regions]
@@ -728,6 +762,12 @@ class YFClient:
                 'pytz_name': t['timezone'][0]['$text']})
 
             ffres.append(tmp)
+
+        ffres = pd.concat(ffres, axis=1).T
+        ffres['open'] = pd.to_datetime(ffres['open'])
+        ffres['close'] = pd.to_datetime(ffres['close'])
+        ffres['open'] = ffres.apply(lambda x: x['open'].tz_convert(x['pytz_name']), axis=1)
+        ffres['close'] = ffres.apply(lambda x: x['close'].tz_convert(x['pytz_name']), axis=1)
 
         return pd.concat(ffres, axis=1).T# }}}
 
