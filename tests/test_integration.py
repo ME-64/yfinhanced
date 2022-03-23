@@ -1,7 +1,5 @@
-import pytest
-
 import yfinhanced
-import numpy as np
+import pytest
 import pandas as pd
 
 
@@ -10,47 +8,72 @@ import pandas as pd
 async def yf():
     yf = yfinhanced.YFClient()
     await yf.connect()
-    return yf# }}}
+    yield yf
+    await yf.disconnect() # }}}
 
-@pytest.mark.asyncio# {{{
-async def test_quote(yf):
+async def test_quote(yf):# {{{
+    # testing basic request
     res = await yf.get_quote('AAPL')
-    assert res['symbol'][0] == 'AAPL'
+    assert res['AAPL']['shortName'] == 'Apple Inc.'
+    assert res['AAPL']['financialCurrency'] == 'USD'
+    assert res['AAPL']['quoteType'] == 'EQUITY'
+    assert res['AAPL']['currency'] == 'USD'
 
+    # testing a bullshit ticker
     res = await yf.get_quote('nonesenseasdf')
-    assert res['symbol'][0] == 'nonesenseasdf'
-    assert res['uuid'].isna().sum() == 1
+    assert not res
 
+    # testing passing a list of quotes
     res = await yf.get_quote(['TSLA', 'AAPL'])
-    assert res['symbol'][0] == 'TSLA'
-    assert res['symbol'][1] == 'AAPL'
+    assert 'AAPL' in res
+    assert 'TSLA' in res
 
-    res = await yf.get_quote('AAPL', columns=['bid', 'ask'])
-    assert res.columns.tolist() == ['bid', 'ask', 'symbol']# }}}
+    res = await yf.get_quote('EURUSD=X', fields='bid')
+    assert 'bid' in res['EURUSD=X'] 
 
-@pytest.mark.asyncio# {{{
-async def test_quote_summary(yf):
+    res = await yf.get_quote('AAPL', fields=['bid', 'ask'])
+    assert 'bid' in res['AAPL'] 
+    assert 'ask' in res['AAPL'] 
+
+    res = await yf.get_quote('AAPL', fields=['bid', 'ask', 'notafield'])
+    assert 'bid' in res['AAPL']
+    assert 'ask' in res['AAPL']
+    assert 'notafield' not in res['AAPL'] # }}}
+
+async def test_quote_summary(yf):# {{{
     res = await yf.get_quote_summary('AAPL')
-    assert list(res.keys())[0] == 'AAPL'
-    assert 'assetProfile' in list(res['AAPL'].keys())
+    assert 'AAPL' in res
+    assert 'assetProfile' in res['AAPL']
 
     res = await yf.get_quote_summary('nonesenseasdf')
-    assert 'nonesenseasdf' in list(res.keys())# }}}
+    assert 'nonesenseasdf' not in res
 
-@pytest.mark.asyncio# {{{
-async def test_trending(yf):
+    res = await yf.get_quote_summary(['AAPL', 'TSLA'])
+    assert 'AAPL' in res
+    assert 'TSLA' in res
+
+    res = await yf.get_quote_summary(['AAPL', 'TSLA'], ['assetProfile'])
+    assert 'AAPL' in res
+    assert 'TSLA' in res
+    assert 'assetProfile' in res['AAPL']
+    assert 'assetProfile' in res['TSLA']
+
+    # }}}
+
+async def test_trending(yf):# {{{
 
     res = await yf.get_trending('us', count=1)
+    assert 'us' in res
     assert len(res['us']) == 1
 
-    res = await yf.get_trending('sddff', count=1)
-    assert len(res['sddff']) == 0
-
     res = await yf.get_trending(['us', 'gb'], count=1)
-    assert len(list(res.keys())) == 2# }}}
+    assert 'us' in res
+    assert 'gb' in res
 
-@pytest.mark.asyncio# {{{
-async def test_search(yf):
+    res = await yf.get_trending('sddff', count=1)
+    assert not res # }}}
+
+async def test_search(yf):# {{{
     res = await yf.get_search('AAPL', stype='quote')
     assert res.shape[0] > 0
     assert res['query_string'][0] == 'AAPL'
@@ -66,8 +89,7 @@ async def test_search(yf):
     assert 'AAPL' in res['query_string'].tolist()
     assert 'TSLA' in res['query_string'].tolist()# }}}
 
-@pytest.mark.asyncio# {{{
-async def test_markettime(yf):
+async def test_markettime(yf):# {{{
     res = await yf.get_markettime('us')
     assert res['name'][0] == 'us'
     assert res['short_yname'][0] == 'us'
@@ -77,8 +99,7 @@ async def test_markettime(yf):
     assert 'gb' in res['short_yname'].tolist()
     assert 'us' in res['short_yname'].tolist()# }}}
 
-@pytest.mark.asyncio# {{{
-async def test_esg_peer_scores(yf):
+async def test_esg_peer_scores(yf):# {{{
     res = await yf.get_esg_peer_scores('AAPL')
     assert 'AAPL' in res['ticker'].tolist()
 
@@ -89,8 +110,7 @@ async def test_esg_peer_scores(yf):
     assert 'AAPL' in res['ticker'].tolist()
     assert 'TSLA' in res['ticker'].tolist()# }}}
 
-@pytest.mark.asyncio# {{{
-async def test_symbol_recos(yf):
+async def test_symbol_recos(yf):# {{{
     res = await yf.get_symbol_recos('AAPL')
     assert 'AAPL' in res['symbol'].tolist()
     assert res.shape[0] > 0
@@ -102,8 +122,7 @@ async def test_symbol_recos(yf):
     res = await yf.get_symbol_recos('nonesense')
     assert res.shape[0] == 0# }}}
 
-@pytest.mark.asyncio# {{{
-async def test_equity_reference(yf):
+async def test_equity_reference(yf):# {{{
 
     res = await yf.get_equity_reference('us', 100)
     assert res.shape[0] == 100

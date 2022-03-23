@@ -1,17 +1,15 @@
 from setuptools import setup
 from setuptools import find_packages
-import pathlib
 from glob import glob
+import pathlib
 
 # python3 setup.py sdist bdist_wheel
 # twine upload dist/*
 
 HERE = pathlib.Path(__file__).parent
-README = (HERE / "README.md").read_text()
+README = (HERE / "README.rst").read_text()
 
 exec(open('src/yfinhanced/_version.py').read())
-
-
 
 
 setup(
@@ -23,16 +21,16 @@ setup(
         license='MIT',
         description = 'A python wrapper around the yahoo finance API that leverages pandas DataFrames',
         long_description = README,
-        long_description_content_type = 'text/markdown',
+        long_description_content_type = 'text/rst',
         author = 'ME-64',
         author_email = 'milo_elliott@icloud.com',
         url = 'https://github.com/ME-64/yfinhanced',
         keywords = ['api wrapper', 'yahoo finance', 'markets'],
         include_package_data = True,
         zip_safe = False,
-        install_requires=['pandas', 'aiohttp', 'asyncio', 'pytz', 'requests'],
+        install_requires=['pandas>1,<2', 'aiohttp>3,<4', 'asyncio', 'pytz', 'requests>2,<3'],
         extras_require={
-            "dev": ['pytest', 'pyteset-asyncio']},
+            "dev": ['pytest>7,<8', 'pyteset-asyncio>0.17,<1']},
         classifiers=[
             'Development Status :: 3 - Alpha',
             'Intended Audience :: Developers',

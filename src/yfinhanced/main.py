@@ -15,27 +15,27 @@ import asyncio
 class YFClient:
 
 
-    _BASE_URL = 'https://query1.finance.yahoo.com'# {{{
-    _SCREENER_URL = _BASE_URL + '/v1/finance/screener'
-    _QUOTE_SUMMARY_URL = _BASE_URL + '/v10/finance/quoteSummary/'
-    _TRENDING_URL = _BASE_URL + '/v1/finance/trending/'
-    _FIELD_URL = _BASE_URL + '/v1/finance/screener/instrument/{asset_class}/fields'
-    _QUOTE_URL = _BASE_URL + '/v7/finance/quote' #params symbol
-    _RECCO_URL = _BASE_URL + '/v6/finance/recommendationsbysymbol/{symbol}'
-    _PEER_ESG_URL = _BASE_URL + '/v1/finance/esgPeerScores' #params symbol
-    _SEARCH_URL = _BASE_URL + '/v1/finance/search' # params q, quoteCount, newsCount, enableFuzzyQuery,
-    _HISTORY_URL = _BASE_URL + '/v8/finance/chart/{symbol}'
-    _TIME_URL = _BASE_URL + '/v6/finance/markettime' # params region, lang=en-US
+    _BASE_URL: str = 'https://query1.finance.yahoo.com'# {{{
+    _SCREENER_URL: str = _BASE_URL + '/v1/finance/screener'
+    _QUOTE_SUMMARY_URL: str = _BASE_URL + '/v10/finance/quoteSummary/'
+    _TRENDING_URL: str = _BASE_URL + '/v1/finance/trending/'
+    _FIELD_URL: str = _BASE_URL + '/v1/finance/screener/instrument/{asset_class}/fields'
+    _QUOTE_URL: str = _BASE_URL + '/v7/finance/quote' #params symbol
+    _RECCO_URL: str = _BASE_URL + '/v6/finance/recommendationsbysymbol/{symbol}'
+    _PEER_ESG_URL: str = _BASE_URL + '/v1/finance/esgPeerScores' #params symbol
+    _SEARCH_URL: str = _BASE_URL + '/v1/finance/search' # params q, quoteCount, newsCount, enableFuzzyQuery,
+    _HISTORY_URL: str = _BASE_URL + '/v8/finance/chart/{symbol}'
+    _TIME_URL: str = _BASE_URL + '/v6/finance/markettime' # params region, lang=en-US
 
-    _DUMMY_URL = 'https://finance.yahoo.com/quote/AAPL'
+    _DUMMY_URL: str = 'https://finance.yahoo.com/quote/AAPL'
 
-    _HEADERS = {'Content-Type': 'application/json',
+    _HEADERS: dict = {'Content-Type': 'application/json',
             'Origin': 'https://finance.yahoo.com',
             'Accept-Language': 'en-gb',
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1 Safari/605.1.15',
             }
 
-    _QUOTE_SUMMARY_MODULES = ['assetProfile', 'secFilings', 
+    _QUOTE_SUMMARY_MODULES: list = ['assetProfile', 'secFilings', 
             'incomeStatementHistory', 'cashflowStatementHistory', 'balanceSheetHistory',
             'incomeStatementHistoryQuarterly', 'cashflowStatementHistoryQuarterly', 'balanceSheetHistoryQuarterly',
             'earningsHistory', 'earningsTrend', 'industryTrend', 'indexTrend', 'sectorTrend',
@@ -47,12 +47,13 @@ class YFClient:
             'topHoldings', 'fundProfile', 'quoteType']
 # }}}
 
-    async def connect(self, limit=2):# {{{
+    async def connect(self, limit: int|None = 2) -> None:# {{{
         """
         Parameters
         ----------
-        limit: int
-            The maximum number of simultaneously open connections
+        limit:
+            The maximum number of simultaneously open connections. If none
+            then there is no maximum limit
         """
         self._limit = limit
 
@@ -63,65 +64,73 @@ class YFClient:
                 headers=self._HEADERS, cookies=self._cookies)
         # }}}
 
-    async def get_new_crumb(self):# {{{
+    async def get_new_crumb(self) -> None:# {{{
+        self._crumb: str
+        self._cookies: requests.cookies.RequestsCookieJar
         self._crumb, self._cookies = self._get_crumb()
         await self.session.close()
-        connector = aiohttp.TCPConnector(limit=self._limit)
-        self.session = aiohttp.ClientSession(connector=connector,
-                headers=self.HEADERS, cookies=self._cookies)
+        connector : aiohttp.TCPConnector = aiohttp.TCPConnector(limit=self._limit)
+        self.session : aiohttp.ClientSession = aiohttp.ClientSession(connector=connector,
+                headers=self._HEADERS, cookies=self._cookies)
         # }}}
 
-    def _get_crumb(self):# {{{
+    def _get_crumb(self) -> None:# {{{
         """method to retrieve the crumb that yahoo uses for api authentication"""
 
         # tmp = requests.get(self.DUMMY_URL, headers=self.HEADERS, proxies=self.proxy)
-        tmp = requests.get(self._DUMMY_URL, headers=self._HEADERS)
-        crumb = re.findall('"CrumbStore":{"crumb":"(.+?)"}', tmp.text)[0]
-        cookies = tmp.cookies
+        tmp : requests.models.Response = requests.get(self._DUMMY_URL, headers=self._HEADERS)
+        crumb: str = re.findall('"CrumbStore":{"crumb":"(.+?)"}', tmp.text)[0]
+        cookies: requests.cookies.RequestsCookieJar = tmp.cookies
 
         return crumb, cookies# }}}
 
-    async def _make_request(self, method, url, params={}):# {{{
+    async def _make_request(self, method: str, url: str, **kwargs) -> aiohttp.client_reqrep.ClientResponse:# {{{
         """function that makes all the requests async"""
 
-        params.update({'crumb': self._crumb})
+        crum: dict = {'crumb': self._crumb}
 
-        resp = await self.session.request(method, url, params=params)
+        if 'params' in kwargs:
+            kwargs['params'].update(crum)
+        else:
+            kwargs['params'] = crum
+
+        resp: aiohttp.client_reqrep.ClientResponse = await self.session.request(method, url, **kwargs)
         return resp# }}}
 
-    async def disconnect(self):# {{{
+    async def disconnect(self) -> None:# {{{
+        """close the client session"""
         await self.session.close()# }}}
 
-    async def _get_quote(self, symbols, fields):# {{{
+    async def _get_quote(self, symbols: list, fields: list) -> list:# {{{
 
-        url = self._QUOTE_URL
-        params = {'symbols': ','.join(symbols)}
+        url: str = self._QUOTE_URL
+        params: dict = {'symbols': ','.join(symbols)}
         if fields:
             params.update({'fields': ','.join(fields)})
 
-        resp = await self._make_request('get', url, params=params)
+        resp: aiohttp.client_reqrep.ClientResponse = await self._make_request('get', url, params=params)
 
-        resp = await resp.json()
+        resp: dict = await resp.json()
         if resp['quoteResponse']['error']:
             raise ValueError(f'{resp["quoteResponse"]["error"]}')
 
-        resp = resp['quoteResponse']['result']
+        resp: list = resp['quoteResponse']['result']
         return resp
         # }}}
 
-    async def get_quote(self, symbols, fields=None):# {{{
+    async def get_quote(self, symbols: str|list, fields: str|list =None) -> dict:# {{{
         """
         Parameters
         ----------
-        symbols: str or list
+        symbols:
             The yahoo finance symbols to get data for
-        fields: str or list. default: None
+        fields:
             The yahoo finance fields to get data for. If not specified, it
             will return all available fields for the given instrument
 
         Returns
         -------
-        result: dict
+        dict:
             A dictionary where the keys are the symbols, and the values are a dictionary
             of key value pairs for each field.
             Note: Even when a subset of fields is specified - the yahoo finance
@@ -451,11 +460,6 @@ class YFClient:
 
     async def _get_quote_summary(self, ticker, modules=None):# {{{
 
-        if isinstance(modules, str):
-            modules = [modules]
-        if not modules:
-            modules = self._QUOTE_SUMMARY_MODULES
-
         url = self._QUOTE_SUMMARY_URL + ticker
         modules = ','.join(modules)
         params = {'modules': modules, 'format': 'false'}
@@ -474,7 +478,8 @@ class YFClient:
     async def get_quote_summary(self, symbols, modules=None):# {{{
 
         if not modules:
-            modules = self.QUOTE_SUMMARY_MODULES
+            modules = self._QUOTE_SUMMARY_MODULES
+
         symbols = [symbols] if isinstance(symbols, str) else symbols
         modules = [modules] if isinstance(modules, str) else modules
 
@@ -486,7 +491,8 @@ class YFClient:
 
         fres = {}
         for symb, qs in zip(symbols, res):
-            fres[symb] = qs
+            if qs:
+                fres[symb] = qs
 
         return fres# }}}
 
@@ -504,12 +510,24 @@ class YFClient:
             tmp = []
             for i in data:
                 tmp.append(i['symbol'])
-            print(f'got {region}')
             return tmp
         except Exception as e:
-            print(resp['finance'])
             return []
         # }}}
+
+    async def get_trending(self, regions=['us', 'gb'], count=5):# {{{
+
+        regions = [regions] if isinstance(regions, str) else regions
+
+        tasks = [self._get_trending(region=reg, count=count) for reg in regions]
+
+        res = await asyncio.gather(*tasks)
+
+        fres = {}
+        for r, rs in zip(regions, res):
+            if rs:
+                fres[r] = rs
+        return fres# }}}
 
     async def _get_screener_fields(self, asset_class):# {{{
 
@@ -604,25 +622,6 @@ class YFClient:
                 'pre_end': convert_sess('pre', 'end'),
                 'post_start': convert_sess('post', 'start'),
                 'post_end': convert_sess('post', 'end')}# }}}
-
-    async def get_trending(self, regions=['us', 'gb'], count=5):# {{{
-
-        if isinstance(regions, str):
-            regions = [regions]
-
-        res = {}
-        tasks = []
-        for reg in regions:
-            tasks.append(self._get_trending(region=reg, count=count))
-
-        res = await asyncio.gather(*tasks)
-
-        fres = {}
-        for r, rs in zip(regions, res):
-            fres[r] = rs
-
-
-        return fres# }}}
 
     async def _get_symbol_recos(self, symbol):# {{{
 

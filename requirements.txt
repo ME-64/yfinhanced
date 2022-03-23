@@ -6,4 +6,7 @@ pytz
 sphinx
 sphinx-rtd-theme
 protobuf
+pytest
+pytest-asyncio
+pylint
 
