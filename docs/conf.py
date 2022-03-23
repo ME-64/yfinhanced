@@ -33,7 +33,8 @@ release = 'ALPHA'
 extensions = [
         'sphinx.ext.autodoc',
         'sphinx.ext.napoleon',
-        'sphinx_rtd_theme'
+        'sphinx_rtd_theme',
+        'sphinx.ext.githubpages'
         # 'myst_parser'
 ]
 
