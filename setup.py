@@ -30,7 +30,7 @@ setup(
         keywords = ['api wrapper', 'yahoo finance', 'markets'],
         include_package_data = True,
         zip_safe = False,
-        install_requires=['pandas', 'aiohttp', 'asyncio', 'requests', 'pytz', 'requests'],
+        install_requires=['pandas', 'aiohttp', 'asyncio', 'pytz', 'requests'],
         extras_require={
             "dev": ['pytest', 'pyteset-asyncio']},
         classifiers=[
