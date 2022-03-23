@@ -46,6 +46,11 @@ jobs:
       - name: Install dependencies
         run: python3 -m pip install -r ./requirements.txt
 
+      - name: create sphinx documentation
+        run: |
+          cd docs
+          make html
+
       - name: Publish to GitHub Pages
         if: success()
         uses: crazy-max/ghaction-github-pages@v2
