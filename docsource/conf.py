@@ -34,7 +34,22 @@ extensions = [
         'sphinx.ext.autodoc',
         'sphinx.ext.napoleon',
         'sphinx_rtd_theme'
+        # 'myst_parser'
 ]
+
+# import pathlib{{{
+# 
+# readme_path = pathlib.Path(__file__).parent.resolve().parent / 'README.md'
+# 
+# readme_target = pathlib.Path(__file__).parent / 'README.md'
+# 
+# with readme_target.open('w') as outf:
+#     lines = []
+#     for line in readme_path.read_text().split('\n'):
+#         lines.append(line)
+#     outf.write('\n'.join(lines))
+# 
+# source_suffix = ['.rst', '.md']}}}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to yfinhanced’s documentation! &mdash; yfinhanced ALPHA documentation</title>
+  <title>yfinhanced - A simple asyncronous wrapper around the public yahoo finance API &mdash; yfinhanced ALPHA documentation</title>
       <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
       <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
   <!--[if lt IE 9]>
@@ -37,8 +37,8 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <!-- Local TOC -->
               <div class="local-toc"><ul>
-<li><a class="reference internal" href="#">Welcome to yfinhanced’s documentation!</a></li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+<li><a class="reference internal" href="#"><cite>yfinhanced</cite> - A simple asyncronous wrapper around the public yahoo finance API</a></li>
+<li><a class="reference internal" href="#introduction">Introduction</a></li>
 <li><a class="reference internal" href="#api-documentation">API Documentation</a></li>
 </ul>
 </div>
@@ -56,7 +56,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="#" class="icon icon-home"></a> &raquo;</li>
-      <li>Welcome to yfinhanced’s documentation!</li>
+      <li><cite>yfinhanced</cite> - A simple asyncronous wrapper around the public yahoo finance API</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -66,18 +66,95 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <section id="welcome-to-yfinhanced-s-documentation">
-<h1>Welcome to yfinhanced’s documentation!<a class="headerlink" href="#welcome-to-yfinhanced-s-documentation" title="Permalink to this headline"></a></h1>
-<div class="toctree-wrapper compound">
+  <section id="yfinhanced-a-simple-asyncronous-wrapper-around-the-public-yahoo-finance-api">
+<h1><cite>yfinhanced</cite> - A simple asyncronous wrapper around the public yahoo finance API<a class="headerlink" href="#yfinhanced-a-simple-asyncronous-wrapper-around-the-public-yahoo-finance-api" title="Permalink to this headline"></a></h1>
+<p>Other packages either <em>a)</em> didn’t expose the whole yahoo finance API and its
+capabilities or <em>b)</em> were fully syncronous or threaded. <cite>yfinhanced</cite> solves both
+of these issues by providing access to all endpoints, and while using pythons
+modern asyncronous libraries such as <cite>asycnio</cite> and <cite>aiohttp</cite>.</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">yfinhanced</span> <span class="kn">import</span> <span class="n">YFClient</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">yf</span> <span class="o">=</span> <span class="n">YFClient</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">await</span> <span class="n">yf</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">quote</span> <span class="o">=</span> <span class="k">await</span> <span class="n">yf</span><span class="o">.</span><span class="n">get_quote</span><span class="p">([</span><span class="s1">&#39;AAPL&#39;</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="nb">print</span><span class="p">(</span><span class="n">quote</span><span class="p">)</span>
+<span class="go">{&#39;AAPL&#39;: {&#39;language&#39;: &#39;en-US&#39;,</span>
+<span class="go">&#39;region&#39;: &#39;US&#39;,</span>
+<span class="go">&#39;quoteType&#39;: &#39;EQUITY&#39;,</span>
+<span class="go">&#39;typeDisp&#39;: &#39;Equity&#39;,</span>
+<span class="go">&#39;quoteSourceName&#39;: &#39;Nasdaq Real Time Price&#39;,</span>
+<span class="go">&#39;triggerable&#39;: True,</span>
+<span class="go">&#39;customPriceAlertConfidence&#39;: &#39;HIGH&#39;,</span>
+<span class="go">&#39;currency&#39;: &#39;USD&#39;,</span>
+<span class="go">&#39;exchange&#39;: &#39;NMS&#39;,</span>
+<span class="go">&#39;shortName&#39;: &#39;Apple Inc.&#39;,</span>
+<span class="go">&#39;longName&#39;: &#39;Apple Inc.&#39;,</span>
+<span class="go">&#39;messageBoardId&#39;: &#39;finmb_24937&#39;,</span>
+<span class="go">&#39;exchangeTimezoneName&#39;: &#39;America/New_York&#39;,</span>
+<span class="go">&#39;exchangeTimezoneShortName&#39;: &#39;EDT&#39;,</span>
+<span class="go">&#39;gmtOffSetMilliseconds&#39;: -14400000,</span>
+<span class="go">&#39;market&#39;: &#39;us_market&#39;,</span>
+<span class="go">&#39;esgPopulated&#39;: False,</span>
+<span class="go">&#39;fullExchangeName&#39;: &#39;NasdaqGS&#39;,</span>
+<span class="go">&#39;financialCurrency&#39;: &#39;USD&#39;,</span>
+<span class="go">&#39;regularMarketOpen&#39;: 167.99,</span>
+<span class="go">&#39;averageDailyVolume3Month&#39;: 93351350,</span>
+<span class="go">&#39;averageDailyVolume10Day&#39;: 97387620,</span>
+<span class="go">&#39;fiftyTwoWeekLowChange&#39;: 51.429993,</span>
+<span class="go">&#39;fiftyTwoWeekLowChangePercent&#39;: 0.43269387,</span>
+<span class="go">&#39;fiftyTwoWeekRange&#39;: &#39;118.86 - 182.94&#39;,</span>
+<span class="go">&#39;fiftyTwoWeekHighChange&#39;: -12.650009,</span>
+<span class="go">&#39;fiftyTwoWeekHighChangePercent&#39;: -0.06914841,</span>
+<span class="go">&#39;fiftyTwoWeekLow&#39;: 118.86,</span>
+<span class="go">&#39;fiftyTwoWeekHigh&#39;: 182.94,</span>
+<span class="go">&#39;dividendDate&#39;: 1644451200,</span>
+<span class="go">&#39;earningsTimestamp&#39;: 1643301000,</span>
+<span class="go">&#39;earningsTimestampStart&#39;: 1651003200,</span>
+<span class="go">&#39;earningsTimestampEnd&#39;: 1651521600,</span>
+<span class="go">&#39;trailingAnnualDividendRate&#39;: 0.865,</span>
+<span class="go">&#39;trailingPE&#39;: 28.310888,</span>
+<span class="go">&#39;trailingAnnualDividendYield&#39;: 0.0051238,</span>
+<span class="go">&#39;epsTrailingTwelveMonths&#39;: 6.015,</span>
+<span class="go">&#39;epsForward&#39;: 6.56,</span>
+<span class="go">&#39;epsCurrentYear&#39;: 6.16,</span>
+<span class="go">&#39;priceEpsCurrentYear&#39;: 27.64448,</span>
+<span class="go">&#39;sharesOutstanding&#39;: 16319399936,</span>
+<span class="go">&#39;bookValue&#39;: 4.402,</span>
+<span class="go">&#39;fiftyDayAverage&#39;: 166.388,</span>
+<span class="go">&#39;fiftyDayAverageChange&#39;: 3.9019928,</span>
+<span class="go">&#39;fiftyDayAverageChangePercent&#39;: 0.023451166,</span>
+<span class="go">&#39;twoHundredDayAverage&#39;: 154.8563,</span>
+<span class="go">&#39;twoHundredDayAverageChange&#39;: 15.433701,</span>
+<span class="go">&#39;twoHundredDayAverageChangePercent&#39;: 0.099664666,</span>
+<span class="go">&#39;marketCap&#39;: 2779030487040,</span>
+<span class="go">&#39;forwardPE&#39;: 25.958841,</span>
+<span class="go">&#39;priceToBook&#39;: 38.68469,</span>
+<span class="go">&#39;sourceInterval&#39;: 15,</span>
+<span class="go">&#39;exchangeDataDelayedBy&#39;: 0,</span>
+<span class="go">&#39;firstTradeDateMilliseconds&#39;: 345479400000,</span>
+<span class="go">&#39;priceHint&#39;: 2,</span>
+<span class="go">&#39;regularMarketChange&#39;: 1.469986,</span>
+<span class="go">&#39;regularMarketChangePercent&#39;: 0.87074155,</span>
+<span class="go">&#39;regularMarketTime&#39;: 1648046328,</span>
+<span class="go">&#39;regularMarketPrice&#39;: 170.29,</span>
+<span class="go">&#39;regularMarketDayHigh&#39;: 170.76,</span>
+<span class="go">&#39;regularMarketDayRange&#39;: &#39;167.65 - 170.76&#39;,</span>
+<span class="go">&#39;regularMarketDayLow&#39;: 167.65,</span>
+<span class="go">&#39;regularMarketVolume&#39;: 24929352,</span>
+<span class="go">&#39;regularMarketPreviousClose&#39;: 168.82,</span>
+<span class="go">&#39;bid&#39;: 170.08,</span>
+<span class="go">&#39;ask&#39;: 170.13,</span>
+<span class="go">&#39;bidSize&#39;: 12,</span>
+<span class="go">&#39;askSize&#39;: 8,</span>
+<span class="go">&#39;marketState&#39;: &#39;REGULAR&#39;,</span>
+<span class="go">&#39;pageViewGrowthWeekly&#39;: -0.10239728,</span>
+<span class="go">&#39;averageAnalystRating&#39;: &#39;1.8 - Buy&#39;,</span>
+<span class="go">&#39;tradeable&#39;: False,</span>
+<span class="go">&#39;displayName&#39;: &#39;Apple&#39;}}</span>
+</pre></div>
 </div>
 </section>
-<section id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline"></a></h1>
-<ul class="simple">
-<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
-<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
-<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
-</ul>
+<section id="introduction">
+<h1>Introduction<a class="headerlink" href="#introduction" title="Permalink to this headline"></a></h1>
 </section>
 <section id="api-documentation">
 <h1>API Documentation<a class="headerlink" href="#api-documentation" title="Permalink to this headline"></a></h1>

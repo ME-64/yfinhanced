@@ -94,7 +94,7 @@ class YFClient:
 
     async def _get_quote(self, symbols, fields):# {{{
 
-        url = self.QUOTE_URL
+        url = self._QUOTE_URL
         params = {'symbols': ','.join(symbols)}
         if fields:
             params.update({'fields': ','.join(fields)})
@@ -156,7 +156,7 @@ class YFClient:
         assert isinstance(end, datetime.datetime); assert end.tzinfo
         assert isinstance(start, datetime.datetime); assert start.tzinfo
 
-        url = self.HISTORY_URL.format(symbol=symbol)
+        url = self._HISTORY_URL.format(symbol=symbol)
 
 
         params = {'includeAdjustedClose': str(adjust).lower(), 'events': 'div,splits,capitalGain',
@@ -354,7 +354,7 @@ class YFClient:
 
         # print(f"sending: {payload}")
         print('sending')
-        resp = await self._make_request('post', self.SCREENER_URL, json=payload)
+        resp = await self._make_request('post', self._SCREENER_URL, json=payload)
 
         # data = resp.json()['finance']['result'][0]['quotes']
         try:
@@ -454,9 +454,9 @@ class YFClient:
         if isinstance(modules, str):
             modules = [modules]
         if not modules:
-            modules = self.QUOTE_SUMMARY_MODULES
+            modules = self._QUOTE_SUMMARY_MODULES
 
-        url = self.QUOTE_SUMMARY_URL + ticker
+        url = self._QUOTE_SUMMARY_URL + ticker
         modules = ','.join(modules)
         params = {'modules': modules, 'format': 'false'}
 
@@ -493,7 +493,7 @@ class YFClient:
     async def _get_trending(self, region='us', count=5):# {{{
         print(f'getting {region}')
 
-        url = self.TRENDING_URL + '/' + region.upper()
+        url = self._TRENDING_URL + '/' + region.upper()
 
         req = await self._make_request('get', url, params={'count': count})
 
@@ -513,7 +513,7 @@ class YFClient:
 
     async def _get_screener_fields(self, asset_class):# {{{
 
-        url = self.FIELD_URL.format(asset_class=asset_class)
+        url = self._FIELD_URL.format(asset_class=asset_class)
 
         req = await self._make_request('get', url)
 
@@ -629,7 +629,7 @@ class YFClient:
         if isinstance(symbol, str):
             symbol = [symbol]
 
-        res = await self._make_request('get', self.RECCO_URL.format(symbol=','.join(symbol)))
+        res = await self._make_request('get', self._RECCO_URL.format(symbol=','.join(symbol)))
         res = await res.json()
         return res# }}}
 
@@ -669,7 +669,7 @@ class YFClient:
 
     async def _get_markettime(self, region):# {{{
 
-        res = await self._make_request('get', self.TIME_URL,
+        res = await self._make_request('get', self._TIME_URL,
                 params={'lang': 'en-US', 'region': region})
 
         return await res.json()# }}}
@@ -732,7 +732,7 @@ class YFClient:
     async def _get_esg_score(self, symbol, count=5):# {{{
 
 
-        res = await self._make_request('get', self.PEER_ESG_URL, params={'symbol': symbol,
+        res = await self._make_request('get', self._PEER_ESG_URL, params={'symbol': symbol,
             'count': count})
 
         return await res.json()# }}}
@@ -788,7 +788,7 @@ class YFClient:
         params = {'q': query, 'quotesCount': quote_count, 'newsCount': news_count,
                 'enableFuzzyQuery': str(fuzzy).lower()}
 
-        res = await self._make_request('get', self.SEARCH_URL, params=params)
+        res = await self._make_request('get', self._SEARCH_URL, params=params)
 
         res = await res.json()
 
