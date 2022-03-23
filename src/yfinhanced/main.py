@@ -14,28 +14,28 @@ import asyncio
 
 class YFClient:
 
-    snake_pattern = re.compile(r'(?<!^)(?=[A-Z])')# {{{
-    BASE_URL = 'https://query1.finance.yahoo.com'
-    SCREENER_URL = BASE_URL + '/v1/finance/screener'
-    QUOTE_SUMMARY_URL = BASE_URL + '/v10/finance/quoteSummary/'
-    TRENDING_URL = BASE_URL + '/v1/finance/trending/'
-    FIELD_URL = BASE_URL + '/v1/finance/screener/instrument/{asset_class}/fields'
-    QUOTE_URL = BASE_URL + '/v7/finance/quote' #params symbol
-    RECCO_URL = BASE_URL + '/v6/finance/recommendationsbysymbol/{symbol}'
-    PEER_ESG_URL = BASE_URL + '/v1/finance/esgPeerScores' #params symbol
-    SEARCH_URL = BASE_URL + '/v1/finance/search' # params q, quoteCount, newsCount, enableFuzzyQuery,
-    HISTORY_URL = BASE_URL + '/v8/finance/chart/{symbol}'
-    TIME_URL = BASE_URL + '/v6/finance/markettime' # params region, lang=en-US
 
-    DUMMY_URL = 'https://finance.yahoo.com/quote/AAPL'
+    _BASE_URL = 'https://query1.finance.yahoo.com'# {{{
+    _SCREENER_URL = _BASE_URL + '/v1/finance/screener'
+    _QUOTE_SUMMARY_URL = _BASE_URL + '/v10/finance/quoteSummary/'
+    _TRENDING_URL = _BASE_URL + '/v1/finance/trending/'
+    _FIELD_URL = _BASE_URL + '/v1/finance/screener/instrument/{asset_class}/fields'
+    _QUOTE_URL = _BASE_URL + '/v7/finance/quote' #params symbol
+    _RECCO_URL = _BASE_URL + '/v6/finance/recommendationsbysymbol/{symbol}'
+    _PEER_ESG_URL = _BASE_URL + '/v1/finance/esgPeerScores' #params symbol
+    _SEARCH_URL = _BASE_URL + '/v1/finance/search' # params q, quoteCount, newsCount, enableFuzzyQuery,
+    _HISTORY_URL = _BASE_URL + '/v8/finance/chart/{symbol}'
+    _TIME_URL = _BASE_URL + '/v6/finance/markettime' # params region, lang=en-US
 
-    HEADERS = {'Content-Type': 'application/json',
+    _DUMMY_URL = 'https://finance.yahoo.com/quote/AAPL'
+
+    _HEADERS = {'Content-Type': 'application/json',
             'Origin': 'https://finance.yahoo.com',
             'Accept-Language': 'en-gb',
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1 Safari/605.1.15',
             }
 
-    QUOTE_SUMMARY_MODULES = ['assetProfile', 'secFilings', 
+    _QUOTE_SUMMARY_MODULES = ['assetProfile', 'secFilings', 
             'incomeStatementHistory', 'cashflowStatementHistory', 'balanceSheetHistory',
             'incomeStatementHistoryQuarterly', 'cashflowStatementHistoryQuarterly', 'balanceSheetHistoryQuarterly',
             'earningsHistory', 'earningsTrend', 'industryTrend', 'indexTrend', 'sectorTrend',
@@ -43,148 +43,110 @@ class YFClient:
             'financialData', 'recommendationTrend', 'upgradeDowngradeHistory', 'earnings', 'details',
             'summaryDetail', 'price', 'pageViews', 'financialsTemplate', 'components',
             'institutionOwnership', 'fundOwnership', 'majorDirectHolders', 'insiderTransactions',
-            'insiderHolders', 'majorHoldersBreakdown', 'netSharePurchaseActivity', 'fundPerformance']
-
-    QUOTE_COLUMNS = ['symbol', 'uuid', 'underlyingExchangeSymbol', 'messageBoardId', 'longName',
-            'shortName', 'marketCap', 'underlyingSymbol', 'headSymbolAsString', 'isin',
-            'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent', 
-            'regularMarketVolume', 'regularMarketOpen', 'fiftyTwoWeekLow', 'fiftyTwoWeekHigh',
-            'toCurrency', 'fromCurrency', 'toExchange', 'fromExchange', 'bid', 'ask', 'currency',
-            'bidSize', 'askSize', 'averageDailyVolume3Month', 'averageDailyVolume10Day',
-            'marketState', 'beta', 'preMarketTime', 'preMarketChange', 'preMarketChangePercent',
-            'preMarketVolume', 'preMarketOpen', 'currentTradingPeriod', 'tradingPeriods',
-            'preMarketPrice', 'preMarketDayHigh', 'preMarketDayLow', 'preMarketPreviousClose',
-            'regularMarketPreviousClose', 'postMarketPreviousClose', 'postMarketVolume',
-            'postMarketTime', 'regularMarketClose', 'last', 'trade',
-            'postMarketChangePercent', 'postMarketPrice', 'postMarketChange',
-            'language', 'region', 'quoteType', 'quoteSourceName', 'triggerable',
-            'sourceInterval', 'exchangeDataDelayedBy', 'tradeable', 'firstTradeDateMilliseconds',
-            'priceHint', 'regularMarketTime', 'regularMarketDayHigh', 'regularMarketDayRange',
-            'regularMarketDayLow', 'fullExchangeName', 'fiftyTwoWeekLowChange', 'fiftyTwoWeekLowChangePercent',
-            'fiftyTwoWeekRange', 'fiftyTwoWeekHighChange', 'fiftyTwoWeekHighChangePercent',
-            'exchange', 'exchangeTimezoneName', 'exchangeTimezoneShortName', 'gmtOffSetMilliseconds',
-            'market', 'esgPopulated', 'sharesOutstanding'] #not used rn
-
-
-    SCREENER_COLS = ['symbol', 'exchange', 'currency', 'fullExchangeName', 'quoteSourceName', 
-            'shortName', 'longName', 'displayName', 'quoteType', 'firstTradeDateMilliseconds',
-            'priceHint', 'market', 'messageBoardId', 'financialCurrency', 'sourceInterval', 'exchangeDataDelayedBy',
-            'exchangeTimezoneName', 'exchangeTimezoneShortName', 'gmtOffSetMilliseconds', 'prevName', 'nameChangeDate']
-
-    PRICE_HISTORY_COLS = ['symbol', 'date', 'close', 'volume', 'low', 'high',
-                'adjclose', 'ratio', 'adjopen', 'adjhigh', 'adjlow', 'interval', 'date_local',
-                'trading_period']
-
+            'insiderHolders', 'majorHoldersBreakdown', 'netSharePurchaseActivity', 'fundPerformance',
+            'topHoldings', 'fundProfile', 'quoteType']
 # }}}
 
-    def __init__(self):# {{{
-        pass# }}}
+    async def connect(self, limit=2):# {{{
+        """
+        Parameters
+        ----------
+        limit: int
+            The maximum number of simultaneously open connections
+        """
+        self._limit = limit
 
-    async def connect(self, *args, **kwargs):# {{{
+        self._crumb, self._cookies = self._get_crumb()
 
-        self.proxy = None
-        if 'proxy' in kwargs:
-            self.proxy = kwargs['proxy']
-
-        self.crumb, self.cookies = self._get_crumb()
-
-        connector = aiohttp.TCPConnector(limit=10)
+        connector = aiohttp.TCPConnector(limit=self._limit)
         self.session = aiohttp.ClientSession(connector=connector,
-                headers=self.HEADERS, cookies=self.cookies)
-
-
+                headers=self._HEADERS, cookies=self._cookies)
         # }}}
 
     async def get_new_crumb(self):# {{{
-        self.crumb, self.cookies = self._get_crumb()
+        self._crumb, self._cookies = self._get_crumb()
         await self.session.close()
-        connector = aiohttp.TCPConnector(limit=10)
+        connector = aiohttp.TCPConnector(limit=self._limit)
         self.session = aiohttp.ClientSession(connector=connector,
-                headers=self.HEADERS, cookies=self.cookies)
+                headers=self.HEADERS, cookies=self._cookies)
         # }}}
 
     def _get_crumb(self):# {{{
         """method to retrieve the crumb that yahoo uses for api authentication"""
 
         # tmp = requests.get(self.DUMMY_URL, headers=self.HEADERS, proxies=self.proxy)
-        tmp = requests.get(self.DUMMY_URL, headers=self.HEADERS, proxies={'https': self.proxy})
+        tmp = requests.get(self._DUMMY_URL, headers=self._HEADERS)
         crumb = re.findall('"CrumbStore":{"crumb":"(.+?)"}', tmp.text)[0]
         cookies = tmp.cookies
 
         return crumb, cookies# }}}
 
-    async def _make_request(self, method, url, *args, **kwargs):# {{{
+    async def _make_request(self, method, url, params={}):# {{{
         """function that makes all the requests async"""
 
-        params = {'crumb': self.crumb}
+        params.update({'crumb': self._crumb})
 
-        if 'params' in kwargs:
-            params.update(kwargs['params'])
-            del kwargs['params']
-
-        resp = await self.session.request(method, url, params=params, proxy=self.proxy, *args, **kwargs)
+        resp = await self.session.request(method, url, params=params)
         return resp# }}}
 
     async def disconnect(self):# {{{
         await self.session.close()# }}}
 
-    async def _get_quote(self, symbols):# {{{
+    async def _get_quote(self, symbols, fields):# {{{
 
         url = self.QUOTE_URL
+        params = {'symbols': ','.join(symbols)}
+        if fields:
+            params.update({'fields': ','.join(fields)})
 
-        resp = await self._make_request('get', url, params={'symbols': ','.join(symbols), 'fields': ','.join(self.QUOTE_COLUMNS)})
+        resp = await self._make_request('get', url, params=params)
 
         resp = await resp.json()
         if resp['quoteResponse']['error']:
             raise ValueError(f'{resp["quoteResponse"]["error"]}')
 
-        res = resp['quoteResponse']['result']
-        if res:
-            return res
-        else:
-            return [{'symbol': x} for x in symbols]
+        resp = resp['quoteResponse']['result']
+        return resp
         # }}}
 
-    async def get_quote(self, symbols, columns=None):# {{{
+    async def get_quote(self, symbols, fields=None):# {{{
+        """
+        Parameters
+        ----------
+        symbols: str or list
+            The yahoo finance symbols to get data for
+        fields: str or list. default: None
+            The yahoo finance fields to get data for. If not specified, it
+            will return all available fields for the given instrument
 
-        if isinstance(columns, str):
-            columns = [columns]
+        Returns
+        -------
+        result: dict
+            A dictionary where the keys are the symbols, and the values are a dictionary
+            of key value pairs for each field.
+            Note: Even when a subset of fields is specified - the yahoo finance
+            API will always return certain fields (i.e. timestamp, symbol)
+        """
 
-        if isinstance(symbols, str):
-            if ',' in symbols:
-                symbols = symbols.split(',')
-            else:
-                symbols = [symbols]
+        fields = [fields] if isinstance(fields, str) else fields
+        symbols = [symbols] if isinstance(symbols, str) else symbols
 
 
         chunks = [symbols[x:x+50] for x in range(0, len(symbols), 50)]
         tasks = []
-        for chunk in chunks:
-            tasks.append(self._get_quote(chunk))
+        tasks = [self._get_quote(chunk, fields) for chunk in chunks]
 
         res = await asyncio.gather(*tasks)
 
-        empty_df = pd.DataFrame(columns=self.QUOTE_COLUMNS)
+        res = [inner for outer in res for inner in outer]
 
-        df = pd.concat([empty_df] + [pd.DataFrame(x) for x in res])
+        fres = {}
+        for r in res:
+            sym = r.pop('symbol')
+            fres[sym] = r
 
-        if columns:
-            if 'symbol' not in columns:
-                columns += ['symbol']
-            df = df[columns]
-
-        for c in df.columns:
-            if c not in self.QUOTE_COLUMNS:
-                print(f'column {c} found in quote df but not in self.QUOTE_COLUMNS')
-
-        for c in self.QUOTE_COLUMNS:
-            if c not in df.columns:
-                df[c] = None
-
-        return df
-        # df.columns = self.camel_to_snake(list(df.columns))
-
-        # return df# }}}
+        return fres
+        # }}}
 
     async def _price_history(self, symbol, interval=None, start=None, end=None, adjust=True,# {{{
             prepost=False):
@@ -214,7 +176,7 @@ class YFClient:
         if 'finance' in resp.keys():
             print('finance error')
             print(f'{resp["finance"]["error"]}')
-            return
+            raise ValueError(resp['chart']['error'])
         if resp['chart']['error']:
             if resp['chart']['error']['description'][0:35] == 'Data doesn\'t exist for startDate = ':
                 print("no results found for period")
@@ -222,6 +184,7 @@ class YFClient:
             else:
                 print('chart error')
                 print(f'{resp["chart"]["error"]}')
+                raise ValueError(resp['chart']['error'])
                 return
 
         if not resp['chart']['result'][0]['indicators']['quote'][0]:
@@ -295,7 +258,10 @@ class YFClient:
         """
 
         if isinstance(symbols, str):
-            symbols = [symbols]
+            if ',' in symbols:
+                symbols = symbols.split(',')
+            else:
+                symbols = [symbols]
 
         tasks = []
         for t in symbols:
@@ -317,7 +283,7 @@ class YFClient:
 
     def _build_screener_payload(self,# {{{
             sort_field='intradaymarketcap', sort_type='DESC', quote_type='EQUITY',
-            mcap_filter=100_000_000, region='us'):
+            mcap_filter=100_000_000, region='us', exchange=None, currency=None):
 
         if isinstance(region, str):
             region = [region]
@@ -353,6 +319,12 @@ class YFClient:
             to_add.append({'operator': 'AND', 'operands': 
                 [{'operator': 'gt', 'operands': ['lastclosemarketcap.lasttwelvemonths', mcap_filter]}]})
 
+        if exchange:
+            to_add.append({ "operator": "eq", "operands": [ "exchange", exchange] })
+
+        if currency:
+            to_add.append({ "operator": "eq", "operands": [ "currency", currency ] })
+
         if region:
            #  reg_query = {
            #          "operator": "or",
@@ -380,6 +352,7 @@ class YFClient:
 
     async def _send_screener_request(self, payload):# {{{
 
+        # print(f"sending: {payload}")
         print('sending')
         resp = await self._make_request('post', self.SCREENER_URL, json=payload)
 
@@ -388,11 +361,11 @@ class YFClient:
             result = await resp.json()
         except:
             cntnt = await resp.text()
-            print(payload)
+            # print(payload)
             raise ValueError(f'couldnt convert to json {cntnt}')
 
-        if result['finance']['error']:
-            print(payload)
+        if result['finance'].get('error', None):
+            # print(payload)
             if result['finance']['error']['description'] == 'Invalid Crumb':
                 await self.get_new_crumb()
                 print('getting new crumb')
@@ -401,7 +374,13 @@ class YFClient:
                 raise ValueError(f'{result["finance"]["error"]}')
 
         # return pd.DataFrame(data)
-        return result['finance']['result'][0]
+        if not result['finance'].get('result'):
+            raise ValueError(f'undefined error {result}')
+        # print(result['finance']['start'], result['finance']['count'], result['finance']['total'])
+        fres = result['finance']['result'][0]
+        print(fres['start'], fres['count'], fres['total'], len(fres['quotes']))
+        return fres
+        # return result['finance']['result'][0]
         # }}}
 
     async def _iter_screener_requests(self, payload, max_results):# {{{
@@ -422,12 +401,27 @@ class YFClient:
             result = await self._send_screener_request(payload)
             data.extend(result['quotes'])
 
-            if len(result['quotes']) < payload['size']:
+
+            if result['count'] == 0:
+                print(f'nothing returned now so breaking')
+                print(f'len of data: {len(data)}; stated total: {result["total"]}')
                 break
+            # this doesnt currently work
+            #if result['total'] <= len(data):
+            #    print(f'result["total"] - all results have been returned')
+            #    break
+            # crypto screener some queries have less than this so commenting out. need to see if breaks equity
+            #if len(result['quotes']) < payload['size']:
+            #    print(f'result has less than {payload["size"]} items so breaking')
+            #    break
 
             if len(data) >= max_results:
+                print(f'data is now longer than {max_results} so breaking')
                 break
             new_offset = result['start'] + result['count']
+            if new_offset > 9900:
+                print(f'offset of {new_offset} would be greater than max results so breaking')
+                break
             payload['offset'] = new_offset
 
         data = data[:max_results]
@@ -440,57 +434,20 @@ class YFClient:
         payload = self._build_screener_payload(region=region, mcap_filter=mcap_filter)
         res = await self._iter_screener_requests(payload, max_results)
 
-        data = pd.DataFrame(columns=self.SCREENER_COLS)
-        data = data.append(pd.DataFrame(res))
+        data = pd.DataFrame()
+        data = pd.DataFrame(res)
+        return data# }}}
 
+    async def get_crypto_reference(self, currency='USD', max_results=100):# {{{
+        payload = self._build_screener_payload(region=None, mcap_filter=None, quote_type='CRYPTOCURRENCY',
+                exchange='CCC', currency=currency)
+        res = await self._iter_screener_requests(payload, max_results)
+        return pd.DataFrame(res)# }}}
 
-        # cols = []
-        # for c in self.SCREENER_COLS:
-        #     if c in data.columns:
-        #         cols.append(c)
-        #     else:
-        #         pass
-        #         # print(f'column {c} not found in ref data')
-
-        # for c in data.columns:
-        #     if c not in self.SCREENER_COLS:
-        #         pass
-        #         # print(f'column {c} not found in defined screen columns')
-
-        print(f'GOT data')
-        return data[self.SCREENER_COLS]# }}}
-
-    async def get_all_equity_reference(self):# {{{
-
-        regions = await self._get_region_reference()
-
-        result = pd.DataFrame()
-
-        tasks = []
-
-        # regions = regions[0:20]
-
-        for reg in regions:
-            # filtering us more strictly than other regions
-            # this is partly because of better mcap data coverage
-            # and partly because there are far more securities ther
-            if reg['code'] == 'us':
-                mcap_filter = 100_000_000
-            else:
-                mcap_filter = None
-            tmp = self.get_equity_reference(region=reg['code'], mcap_filter=mcap_filter)
-            tasks.append(tmp)
-
-
-        res = await asyncio.gather(*tasks)
-
-        for reg, r in zip(regions, res):
-            r['region_code'] = reg['code']
-            r['region_name'] = reg['name']
-
-        df = pd.concat([pd.DataFrame(x) for x in res])
-
-        return df# }}}
+    async def get_etf_reference(self, region=['us'], max_results=100):# {{{
+        payload = self._build_screener_payload(region=region, quote_type='ETF', sort_field='fundnetassets', mcap_filter=None)
+        res = await self._iter_screener_requests(payload, max_results)
+        return pd.DataFrame(res)# }}}
 
     async def _get_quote_summary(self, ticker, modules=None):# {{{
 
@@ -516,14 +473,13 @@ class YFClient:
 
     async def get_quote_summary(self, symbols, modules=None):# {{{
 
-        if isinstance(symbols, str):
-            symbols = [symbols]
+        if not modules:
+            modules = self.QUOTE_SUMMARY_MODULES
+        symbols = [symbols] if isinstance(symbols, str) else symbols
+        modules = [modules] if isinstance(modules, str) else modules
 
 
-        tasks = []
-
-        for symb in symbols:
-            tasks.append(self._get_quote_summary(symb, modules=modules))
+        tasks = [self._get_quote_summary(symb, modules=modules) for symb in symbols]
 
         res = await asyncio.gather(*tasks)
 
@@ -747,7 +703,7 @@ class YFClient:
                 print(f'couldnt find data for {nme}')
                 continue
 
-            tmp = pd.Series({
+            tmp = {
                 'name': nme,
                 'short_yname': t['id'],
                 'yname': t['name'],
@@ -759,17 +715,19 @@ class YFClient:
                 'dst_active': t['timezone'][0]['dst'],
                 'gmtoffset': t['timezone'][0]['gmtoffset'],
                 'timezone_code': t['timezone'][0]['short'],
-                'pytz_name': t['timezone'][0]['$text']})
+                'pytz_name': t['timezone'][0]['$text']}
 
             ffres.append(tmp)
 
-        ffres = pd.concat(ffres, axis=1).T
-        ffres['open'] = pd.to_datetime(ffres['open'])
-        ffres['close'] = pd.to_datetime(ffres['close'])
-        ffres['open'] = ffres.apply(lambda x: x['open'].tz_convert(x['pytz_name']), axis=1)
-        ffres['close'] = ffres.apply(lambda x: x['close'].tz_convert(x['pytz_name']), axis=1)
+        # ffres = pd.concat(ffres, axis=1).T
+        for mkt in ffres:
+            mkt['open'] = pd.to_datetime(mkt['open'])
+            mkt['close'] = pd.to_datetime(mkt['close'])
+            mkt['open'] = mkt['open'].tz_convert(mkt['pytz_name'])
+            mkt['close'] = mkt['close'].tz_convert(mkt['pytz_name'])
+            mkt['dst_active'] = True if mkt['dst_active'].lower() == 'true' else False
 
-        return pd.concat(ffres, axis=1).T# }}}
+        return pd.DataFrame(ffres)# }}}
 
     async def _get_esg_score(self, symbol, count=5):# {{{
 
@@ -827,7 +785,7 @@ class YFClient:
             news_count = count
             quote_count = 0
 
-        params = {'q': query, 'quoteCount': quote_count, 'newsCount': news_count,
+        params = {'q': query, 'quotesCount': quote_count, 'newsCount': news_count,
                 'enableFuzzyQuery': str(fuzzy).lower()}
 
         res = await self._make_request('get', self.SEARCH_URL, params=params)
@@ -869,13 +827,3 @@ class YFClient:
 
         return pd.DataFrame(res)# }}}
 
-    def camel_to_snake(self, cols):# {{{
-        if isinstance(cols, str):
-            cols = [cols]
-        res = []
-        for c in cols:
-            res.append(self.snake_pattern.sub('_', str(c)).lower())
-        return res# }}}
-
-
-# q['spread'] = ((q['ask'] - q['bid']) / ((q['ask'] + q['bid']) / 2)) * 10000
