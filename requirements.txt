@@ -9,4 +9,5 @@ protobuf
 pytest
 pytest-asyncio
 pylint
+wheel
 
