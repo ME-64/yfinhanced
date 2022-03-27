@@ -7,7 +7,7 @@ capabilities or *b)* were fully syncronous or threaded. *yfinhanced* solves both
 of these issues by providing access to all endpoints, and while using pythons
 modern asyncronous libraries such as *asycnio* and *aiohttp*.
 
-You can find the full documentation at: `https://ME-64.github.io/yfinhanced`
+You can find the full documentation at: `https://me-64.github.io/yfinhanced`
 
 .. code-block:: python3
 
