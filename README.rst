@@ -2,10 +2,17 @@ yfinhanced - A simple asyncronous wrapper around the public yahoo finance API
 ===============================================================================
 
 
-Other packages either *a)* didn't expose the whole yahoo finance API and its
-capabilities or *b)* were fully syncronous or threaded. *yfinhanced* solves both
-of these issues by providing access to all endpoints, and while using pythons
-modern asyncronous libraries such as *asycnio* and *aiohttp*.
+While the yahoo finance website is clunky and basic - underlying it is a very
+powerful API that is primarily powered by refinitiv data. Many python packages
+have attempted to implement wrappers around this API, however they fall short
+for one of two reasons. Either they don't expose all of the available endpoints
+of the API, or they are syncronous / rely on threading which is less efficient
+for IO bound tasks.
+
+*yfinhanced* attempts to solve both of these issues by providing access to the
+full range of endpoints, and using pythons modern asyncronous support in
+*asyncio* and *aiohttp*. As a result, this package is extremely fast and
+feature complete.
 
 You can find the full documentation at: `https://me-64.github.io/yfinhanced`
 
@@ -14,9 +21,9 @@ You can find the full documentation at: `https://me-64.github.io/yfinhanced`
     >>> from yfinhanced import YFClient
     >>> yf = YFClient()
     >>> await yf.connect()
-    >>> quote = await yf.get_quote(['AAPL'])
-    >>> print(quote)
-    {'AAPL': {'language': 'en-US',
+    >>> quote = await yf.get_quote(['AAPL', 'BTC-USD', 'BYND220401C00030000', 'GC=F', 'AZN.L'])
+    >>> print(quote['AAPL'])
+    {'language': 'en-US',
     'region': 'US',
     'quoteType': 'EQUITY',
     'typeDisp': 'Equity',
@@ -88,6 +95,6 @@ You can find the full documentation at: `https://me-64.github.io/yfinhanced`
     'pageViewGrowthWeekly': -0.10239728,
     'averageAnalystRating': '1.8 - Buy',
     'tradeable': False,
-    'displayName': 'Apple'}}
+    'displayName': 'Apple'}
 
 
