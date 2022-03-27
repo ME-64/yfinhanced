@@ -6,10 +6,10 @@ import time
 import datetime
 import pytz
 from dateutil import relativedelta
-
 import aiohttp
 import asyncio
 
+aiohttpResponse = aiohttp.client_reqrep.ClientResponse
 
 
 class YFClient:
@@ -55,26 +55,23 @@ class YFClient:
             The maximum number of simultaneously open connections. If none
             then there is no maximum limit
         """
-        self._limit = limit
+        self._limit: int|None = limit
 
+        self._crumb: str
+        self._cookies: requests.cookies.RequestsCookieJar
         self._crumb, self._cookies = self._get_crumb()
 
-        connector = aiohttp.TCPConnector(limit=self._limit)
-        self.session = aiohttp.ClientSession(connector=connector,
+        connector: aiohttp.TCPConnector = aiohttp.TCPConnector(limit=self._limit)
+        self.session: aiohttp.ClientSession = aiohttp.ClientSession(connector=connector,
                 headers=self._HEADERS, cookies=self._cookies)
         # }}}
 
     async def get_new_crumb(self) -> None:# {{{
-        self._crumb: str
-        self._cookies: requests.cookies.RequestsCookieJar
-        self._crumb, self._cookies = self._get_crumb()
-        await self.session.close()
-        connector : aiohttp.TCPConnector = aiohttp.TCPConnector(limit=self._limit)
-        self.session : aiohttp.ClientSession = aiohttp.ClientSession(connector=connector,
-                headers=self._HEADERS, cookies=self._cookies)
+        await self.disconnect()
+        await self.connect()
         # }}}
 
-    def _get_crumb(self) -> None:# {{{
+    def _get_crumb(self) -> tuple[str, requests.cookies.RequestsCookieJar]:# {{{
         """method to retrieve the crumb that yahoo uses for api authentication"""
 
         # tmp = requests.get(self.DUMMY_URL, headers=self.HEADERS, proxies=self.proxy)
@@ -84,7 +81,7 @@ class YFClient:
 
         return crumb, cookies# }}}
 
-    async def _make_request(self, method: str, url: str, **kwargs) -> aiohttp.client_reqrep.ClientResponse:# {{{
+    async def _make_request(self, method: str, url: str, **kwargs) -> aiohttpResponse:# {{{
         """function that makes all the requests async"""
 
         crum: dict = {'crumb': self._crumb}
@@ -94,8 +91,7 @@ class YFClient:
         else:
             kwargs['params'] = crum
 
-        resp: aiohttp.client_reqrep.ClientResponse = await self.session.request(method, url, **kwargs)
-        return resp# }}}
+        return await self.session.request(method, url, **kwargs) # }}}
 
     async def disconnect(self) -> None:# {{{
         """close the client session"""
@@ -108,7 +104,7 @@ class YFClient:
         if fields:
             params.update({'fields': ','.join(fields)})
 
-        resp: aiohttp.client_reqrep.ClientResponse = await self._make_request('get', url, params=params)
+        resp: aiohttpResponse = await self._make_request('get', url, params=params)
 
         resp: dict = await resp.json()
         if resp['quoteResponse']['error']:
@@ -137,19 +133,18 @@ class YFClient:
             API will always return certain fields (i.e. timestamp, symbol)
         """
 
-        fields = [fields] if isinstance(fields, str) else fields
-        symbols = [symbols] if isinstance(symbols, str) else symbols
+        fields: list = [fields] if isinstance(fields, str) else fields
+        symbols: list = [symbols] if isinstance(symbols, str) else symbols
 
 
-        chunks = [symbols[x:x+50] for x in range(0, len(symbols), 50)]
-        tasks = []
-        tasks = [self._get_quote(chunk, fields) for chunk in chunks]
+        chunks: list = [symbols[x:x+50] for x in range(0, len(symbols), 50)]
+        tasks: list = [self._get_quote(chunk, fields) for chunk in chunks]
 
-        res = await asyncio.gather(*tasks)
+        res: list = await asyncio.gather(*tasks)
 
-        res = [inner for outer in res for inner in outer]
+        res: list = [inner for outer in res for inner in outer]
 
-        fres = {}
+        fres: dict = {}
         for r in res:
             sym = r.pop('symbol')
             fres[sym] = r
@@ -290,39 +285,30 @@ class YFClient:
             return pd.DataFrame(columns=self.PRICE_HISTORY_COLS)
         # }}}
 
-    def _build_screener_payload(self,# {{{
-            sort_field='intradaymarketcap', sort_type='DESC', quote_type='EQUITY',
-            mcap_filter=100_000_000, region='us', exchange=None, currency=None):
+    def _build_screener_payload(self, sort_field: str = 'intradaymarketcap', # {{{
+            sort_type: str = 'DESC', quote_type: str = 'EQUITY',
+            mcap_filter: int = 100_000_000, region: str|list[str] = 'us',
+            exchange: str|None = None, currency: str|None = None) -> dict:
 
-        if isinstance(region, str):
-            region = [region]
+        region: list = [region] if isinstance(region, str) else region
 
 
-        payload = {
+        payload: dict = {
                 'size': 100,
                 'offset': 0,
                 'sortField': sort_field,
                 'sortType': sort_type,
                 'quoteType': quote_type,
                 'topOperator': 'AND',
-                # 'includeFields': ['ticker','isin', 'companyshortname', 'sector', 'neutral_count'],
                 'query': {
                     'operator': 'AND',
                     'operands': [
-                        # {
-                        #     'operator': 'gt',
-                        #     'operands': ['lastclosemarketcap.lasttwelvemonths', mcap_filter]
-                        # },
-                 #        {
-                 #            'operator': 'EQ',
-                 #            'operands': ['isin', 'US0378331005']
-                 #        },
                         ],
                 'userId': '',
                 'userIdType': 'guid'
                 } }
 
-        to_add = payload['query']['operands']
+        to_add: list = payload['query']['operands']
 
         if mcap_filter:
             to_add.append({'operator': 'AND', 'operands': 
@@ -335,19 +321,7 @@ class YFClient:
             to_add.append({ "operator": "eq", "operands": [ "currency", currency ] })
 
         if region:
-           #  reg_query = {
-           #          "operator": "or",
-           #          "operands": [
-           #              {
-           #                  "operator": "EQ",
-           #                  "operands": [
-           #                      "region",
-           #                      region
-           #                      ]
-           #                  }
-           #              ]
-           #          }
-            reg_query = {
+            reg_query: dict = {
                     "operator": "or",
                     "operands": []}
 
@@ -359,22 +333,19 @@ class YFClient:
             to_add.append(reg_query)
         return payload# }}}
 
-    async def _send_screener_request(self, payload):# {{{
+    async def _send_screener_request(self, payload: dict) -> dict:# {{{
 
         # print(f"sending: {payload}")
         print('sending')
-        resp = await self._make_request('post', self._SCREENER_URL, json=payload)
+        resp: aiohttpResponse = await self._make_request('post', self._SCREENER_URL, json=payload)
 
-        # data = resp.json()['finance']['result'][0]['quotes']
         try:
-            result = await resp.json()
+            result: dict = await resp.json()
         except:
-            cntnt = await resp.text()
-            # print(payload)
+            cntnt: str = await resp.text()
             raise ValueError(f'couldnt convert to json {cntnt}')
 
         if result['finance'].get('error', None):
-            # print(payload)
             if result['finance']['error']['description'] == 'Invalid Crumb':
                 await self.get_new_crumb()
                 print('getting new crumb')
@@ -382,17 +353,13 @@ class YFClient:
             else:
                 raise ValueError(f'{result["finance"]["error"]}')
 
-        # return pd.DataFrame(data)
         if not result['finance'].get('result'):
             raise ValueError(f'undefined error {result}')
-        # print(result['finance']['start'], result['finance']['count'], result['finance']['total'])
-        fres = result['finance']['result'][0]
-        print(fres['start'], fres['count'], fres['total'], len(fres['quotes']))
-        return fres
-        # return result['finance']['result'][0]
-        # }}}
+        fres: dict = result['finance']['result'][0]
+        # print(fres['start'], fres['count'], fres['total'], len(fres['quotes']))
+        return fres # }}}
 
-    async def _iter_screener_requests(self, payload, max_results):# {{{
+    async def _iter_screener_requests(self, payload: dict, max_results: int|None) -> list:# {{{
 
         if not max_results:
             max_results = 10000
@@ -400,14 +367,14 @@ class YFClient:
         payload['size'] = 100
         payload['offset'] = 0
 
-        total = 0
+        total: int = 0
 
 
-        data = []
+        data: list = []
 
 
         while True:
-            result = await self._send_screener_request(payload)
+            result: dict = await self._send_screener_request(payload)
             data.extend(result['quotes'])
 
 
@@ -427,13 +394,13 @@ class YFClient:
             if len(data) >= max_results:
                 print(f'data is now longer than {max_results} so breaking')
                 break
-            new_offset = result['start'] + result['count']
+            new_offset: int = result['start'] + result['count']
             if new_offset > 9900:
                 print(f'offset of {new_offset} would be greater than max results so breaking')
                 break
             payload['offset'] = new_offset
 
-        data = data[:max_results]
+        data: list = data[:max_results]
 
         return data# }}}
 
@@ -728,7 +695,7 @@ class YFClient:
 
         return pd.DataFrame(ffres)# }}}
 
-    async def _get_esg_score(self, symbol, count=5):# {{{
+    async def _get_esg_peer_score(self, symbol, count=5):# {{{
 
 
         res = await self._make_request('get', self._PEER_ESG_URL, params={'symbol': symbol,
@@ -744,7 +711,7 @@ class YFClient:
         tasks = []
 
         for sym in symbols:
-            tasks.append(self._get_esg_score(sym, count))
+            tasks.append(self._get_esg_peer_score(sym, count))
 
         res = await asyncio.gather(*tasks)
 
