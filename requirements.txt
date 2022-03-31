@@ -10,4 +10,7 @@ pytest
 pytest-asyncio
 pylint
 wheel
+setuptools
+twine
+bump2version
 

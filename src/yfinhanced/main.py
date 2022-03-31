@@ -404,28 +404,27 @@ class YFClient:
 
         return data# }}}
 
-    async def get_equity_reference(self, region=['us'], max_results=10000, mcap_filter=100_000_000):# {{{
+    async def get_equity_reference(self, region: str|list[str] = ['us'], max_results: int = 10000,# {{{
+            mcap_filter: int = 100_000_000) -> pd.DataFrame:
 
         print(f'getting data for {region}')
-        payload = self._build_screener_payload(region=region, mcap_filter=mcap_filter)
-        res = await self._iter_screener_requests(payload, max_results)
+        payload:dict = self._build_screener_payload(region=region, mcap_filter=mcap_filter)
+        res:dict = await self._iter_screener_requests(payload, max_results)
 
-        data = pd.DataFrame()
-        data = pd.DataFrame(res)
-        return data# }}}
+        return pd.DataFrame(res)# }}}
 
-    async def get_crypto_reference(self, currency='USD', max_results=100):# {{{
-        payload = self._build_screener_payload(region=None, mcap_filter=None, quote_type='CRYPTOCURRENCY',
+    async def get_crypto_reference(self, currency: str = 'USD', max_results: int = 100) -> pd.DataFrame:# {{{
+        payload:dict = self._build_screener_payload(region=None, mcap_filter=None, quote_type='CRYPTOCURRENCY',
                 exchange='CCC', currency=currency)
-        res = await self._iter_screener_requests(payload, max_results)
+        res:dict = await self._iter_screener_requests(payload, max_results)
         return pd.DataFrame(res)# }}}
 
-    async def get_etf_reference(self, region=['us'], max_results=100):# {{{
-        payload = self._build_screener_payload(region=region, quote_type='ETF', sort_field='fundnetassets', mcap_filter=None)
-        res = await self._iter_screener_requests(payload, max_results)
+    async def get_etf_reference(self, region:str|list[str]=['us'], max_results:int=100):# {{{
+        payload:dict = self._build_screener_payload(region=region, quote_type='ETF', sort_field='fundnetassets', mcap_filter=None)
+        res:dict = await self._iter_screener_requests(payload, max_results)
         return pd.DataFrame(res)# }}}
 
-    async def _get_quote_summary(self, ticker, modules=None):# {{{
+    async def _get_quote_summary(self, ticker:str, modules:None|list[str]=None):# {{{
 
         url = self._QUOTE_SUMMARY_URL + ticker
         modules = ','.join(modules)
@@ -442,7 +441,7 @@ class YFClient:
             print(res_js['quoteSummary']['error'])
             return {} # }}}
 
-    async def get_quote_summary(self, symbols, modules=None):# {{{
+    async def get_quote_summary(self, symbols:str|list[str], modules:None|str|list[str]=None):# {{{
 
         if not modules:
             modules = self._QUOTE_SUMMARY_MODULES
@@ -463,18 +462,18 @@ class YFClient:
 
         return fres# }}}
 
-    async def _get_trending(self, region='us', count=5):# {{{
+    async def _get_trending(self, region:str='us', count:int=5) -> list:# {{{
         print(f'getting {region}')
 
-        url = self._TRENDING_URL + '/' + region.upper()
+        url:str = self._TRENDING_URL + '/' + region.upper()
 
-        req = await self._make_request('get', url, params={'count': count})
+        req:aiohttpResponse = await self._make_request('get', url, params={'count': count})
 
-        resp = await req.json()
+        resp:dict = await req.json()
 
         try:
-            data = resp['finance']['result'][0]['quotes']
-            tmp = []
+            data:list = resp['finance']['result'][0]['quotes']
+            tmp:list = []
             for i in data:
                 tmp.append(i['symbol'])
             return tmp
@@ -482,15 +481,28 @@ class YFClient:
             return []
         # }}}
 
-    async def get_trending(self, regions=['us', 'gb'], count=5):# {{{
+    async def get_trending(self, regions:str|list[str]=['us', 'gb'], count:int=5) -> dict:# {{{
+        """
+        Parameters
+        ----------
+        regions:
+            which country to get trending tickers from
+        count:
+            how many tickers to retrieve
 
-        regions = [regions] if isinstance(regions, str) else regions
+        Returns
+        -------
+        dict:
+            Dictionary with keys as regions, and values as lists of symbols
+        """
 
-        tasks = [self._get_trending(region=reg, count=count) for reg in regions]
+        regions:list = [regions] if isinstance(regions, str) else regions
 
-        res = await asyncio.gather(*tasks)
+        tasks:list = [self._get_trending(region=reg, count=count) for reg in regions]
 
-        fres = {}
+        res:list = await asyncio.gather(*tasks)
+
+        fres:dict = {}
         for r, rs in zip(regions, res):
             if rs:
                 fres[r] = rs
