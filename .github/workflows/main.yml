@@ -10,7 +10,29 @@ on:
   #  workflow_dispatch:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
+
 jobs:
+
+# {{{ run-tests
+  run-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.10'
+      - name: Upgrade Pip and install deps
+        run: |
+          # install pip>=20.1 to use "pip cache dir"
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -r ./requirements.txt
+          python3 -m pip install .
+      - name: run tests
+        run: |
+          pytest -x
+# }}}
+
 # {{{ build
   build:
     # The type of runner that the job will run on
@@ -112,6 +134,7 @@ jobs:
 
       runs-on: ubuntu-latest
       if: "!startsWith(github.event.head_commit.message, '[SKIP]')"
+      needs: run-tests
 
       steps:
 
