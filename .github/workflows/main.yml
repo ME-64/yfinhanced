@@ -68,6 +68,12 @@ jobs:
     needs: [build, bump-version]
     steps:
       - uses: actions/checkout@v2
+      - name: Setup Git
+        run: |
+          git config user.name "ME-64"
+          git config user.email 'milo_elliott@icloud.com'
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/$GITHUB_REPOSITORY
+          git checkout "${GITHUB_REF:11}"
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
@@ -113,6 +119,8 @@ jobs:
         run: |
           git config user.name "ME-64"
           git config user.email 'milo_elliott@icloud.com'
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/$GITHUB_REPOSITORY
+          git checkout "${GITHUB_REF:11}"
 
       - name: Set up Python
         uses: actions/setup-python@v2
