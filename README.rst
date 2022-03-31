@@ -1,4 +1,4 @@
-yfinhanced v0.1.6
+yfinhanced v0.1.7
 ===============================================================================
 
 **A simple asyncronous wrapper around the public yahoo finance API**
