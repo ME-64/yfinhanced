@@ -21,7 +21,7 @@ setup(
         license='MIT',
         description = 'A python wrapper around the yahoo finance API that leverages pandas DataFrames',
         long_description = README,
-        long_description_content_type = 'text/rst',
+        long_description_content_type = 'text/x-rst',
         author = 'ME-64',
         author_email = 'milo_elliott@icloud.com',
         url = 'https://github.com/ME-64/yfinhanced',
