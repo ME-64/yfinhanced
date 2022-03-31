@@ -1,6 +1,7 @@
-yfinhanced - A simple asyncronous wrapper around the public yahoo finance API
+yfinhanced v0.1.3
 ===============================================================================
 
+**A simple asyncronous wrapper around the public yahoo finance API**
 
 While the yahoo finance website is clunky and basic - underlying it is a very
 powerful API that is primarily powered by refinitiv data. Many python packages
