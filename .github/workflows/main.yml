@@ -61,7 +61,8 @@ jobs:
           build_dir: ./docs/_build/html
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  publish:
+
+  publish_pypi:
     needs: build
     runs-on: ubuntu-latest
     steps:
