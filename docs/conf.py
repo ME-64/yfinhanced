@@ -22,7 +22,7 @@ copyright = '2022, Milo Elliott'
 author = 'Milo Elliott'
 
 # The full version, including alpha/beta/rc tags
-release = '0.1.3'
+release = '0.1.4'
 
 
 # -- General configuration ---------------------------------------------------
